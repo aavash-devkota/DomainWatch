@@ -190,19 +190,23 @@ mark{background:#8957e5;color:#fff;border-radius:3px}
 
 <section id="tools">
 <h2>Tools</h2>
-Domain: <input id="tdom" placeholder="example.com">
-<button onclick="probe('check')">Check</button>
-<button onclick="probe('score')">Score</button>
-<button onclick="probe('audit')">Audit</button>
-<button onclick="probe('price-compare')">Compare price</button>
-<button onclick="probe('ct')">CT / Certificates</button>
-<button onclick="probe('subdomains')">Subdomains</button>
-<button onclick="probe('tls')">TLS</button>
-<button onclick="probe('http')">HTTP</button>
-<button onclick="probe('lifecycle')">Lifecycle</button>
-<button onclick="probe('dns')">DNS</button>
+Domain: <input id="tdom" placeholder="example.com"><br>
+Select tools (multiple allowed):<br>
+<label><input type="checkbox" value="check" checked> Check</label>
+<label><input type="checkbox" value="score"> Score</label>
+<label><input type="checkbox" value="audit"> Audit</label>
+<label><input type="checkbox" value="price-compare"> Price-compare</label>
+<label><input type="checkbox" value="ct"> CT</label>
+<label><input type="checkbox" value="subdomains"> Subdomains</label>
+<label><input type="checkbox" value="tls"> TLS</label>
+<label><input type="checkbox" value="http"> HTTP</label>
+<label><input type="checkbox" value="lifecycle"> Lifecycle</label>
+<label><input type="checkbox" value="dns"> DNS</label><br>
+<button onclick="runSelected()">Run selected</button>
+<button onclick="selectAllTools(true)">Select all</button>
+<button onclick="selectAllTools(false)">Clear</button>
 <input placeholder="Filter result lines…" oninput="filterPre('toolout',this.value)" style="width:100%;margin:.5em 0">
-<pre id="toolout">Pick a domain and a tool…</pre>
+<pre id="toolout">Pick a domain, select tools, and run…</pre>
 </section>
 
 <section id="providers"><h2>Provider health</h2><button onclick="loadProviders()">Probe</button><pre id="provout"></pre></section>
@@ -245,10 +249,15 @@ async function addDomain(){const n=document.getElementById('nd').value;const t=d
 async function del(d){await api('/domains/'+d,{method:'DELETE'});loadDomains();}
 async function checkNow(d){await api('/checks/run/'+d);loadDomains();}
 async function loadEvents(){const e=await api('/events');const t=document.getElementById('etable');t.innerHTML='<tr><th>Time</th><th>Type</th><th>Message</th></tr>';e.forEach(x=>t.innerHTML+=`<tr><td>${x.timestamp}</td><td>${x.type}</td><td>${x.message}</td></tr>`);}
-async function probe(what){const d=document.getElementById('tdom').value;if(!d)return alert('enter a domain');
-document.getElementById('toolout').textContent='loading…';
+function selectAllTools(v){document.querySelectorAll('#tools input[type=checkbox]').forEach(c=>c.checked=v);}
+async function runSelected(){const d=document.getElementById('tdom').value;if(!d)return alert('enter a domain');
+const chosen=[...document.querySelectorAll('#tools input[type=checkbox]:checked')].map(c=>c.value);
+if(!chosen.length)return alert('select at least one tool');
 const map={check:'/checks/run/',score:'/score/',audit:'/audit/','price-compare':'/price-compare/',ct:'/certificates/',subdomains:'/subdomains/',tls:'/tls/',http:'/http/',lifecycle:'/lifecycle/',dns:'/dns/'};
-try{const r=await api(map[what]+d);const el=document.getElementById('toolout');el.textContent=JSON.stringify(r,null,2);delete el.dataset.raw;}catch(e){document.getElementById('toolout').textContent='error: '+e;}}
+const el=document.getElementById('toolout');el.textContent='';delete el.dataset.raw;
+for(const what of chosen){el.textContent+='\n===== '+what.toUpperCase()+' =====\n';
+try{const r=await api(map[what]+d);el.textContent+=JSON.stringify(r,null,2)+'\n';}catch(e){el.textContent+='error: '+e+'\n';}
+delete el.dataset.raw;}}
 async function loadProviders(){const r=await fetch('/metrics');document.getElementById('provout').textContent=await r.text();}
 async function createKey(){const n=document.getElementById('kn').value;const r=document.getElementById('kr').value;const res=await api(`/keys?name=${n}&role=${r}`,{method:'POST'});alert('New key: '+res.key);loadKeys();}
 async function loadKeys(){const k=await api('/keys');const t=document.getElementById('ktable');t.innerHTML='<tr><th>Name</th><th>Role</th><th>Team</th><th>Revoked</th></tr>';k.forEach(x=>t.innerHTML+=`<tr><td>${x.name}</td><td>${x.role}</td><td>${x.team}</td><td>${x.revoked}</td></tr>`);}
