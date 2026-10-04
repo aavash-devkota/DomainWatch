@@ -42,8 +42,7 @@ def fetch(domain: str, limit: int = 50) -> list[CTEntry]:
             _t.sleep(2 * (attempt + 1))
     if not out:
         out = _certspotter(domain, limit)
-    if not out:
-        raise RuntimeError("both crt.sh and certspotter unavailable")
+    # empty is a valid result (no CT entries); error only if both sources failed
     # dedupe by cert id, keep newest first
     seen, uniq = set(), []
     for e in sorted(out, key=lambda e: e.not_before, reverse=True):

@@ -250,8 +250,9 @@ def cmd_watch(args) -> int:
         db.add_domain(d)
     eng = _engine(args)
     interval = args.interval
-    print(f"DomainWatch v{__version__} — watching…\n")
+    print(f"DomainWatch v{__version__} — watching…\n", flush=True)
     while True:
+        print(f"\n{datetime.now():%H:%M:%S} sweeping…", flush=True)
         states = eng.check_all()
         print(f"\n{datetime.now():%H:%M:%S} sweep:")
         for st in states:
@@ -485,8 +486,9 @@ def cmd_lifecycle(args) -> int:
         lc = classify(bool(last["available"]) if last["available"] is not None else None, last["expiration"], last["status"])
         print(f"{args.domain}: {lc.value} (expires {last['expiration'] or 'unknown'})")
     else:
-        info = rdap_client.parse_rdap(rdap_client.rdap_lookup(args.domain).get("raw") or {})
-        lc = classify(info.get("available"), info.get("expiration"))
+        res = rdap_client.rdap_lookup(args.domain)
+        info = rdap_client.parse_rdap(res.get("raw") or {})
+        lc = classify(res.get("available"), info.get("expiration"), info.get("status") and ", ".join(info["status"]) if isinstance(info.get("status"), list) else info.get("status"))
         print(f"{args.domain}: {lc.value} (expires {info.get('expiration','unknown')})")
     return 0
 

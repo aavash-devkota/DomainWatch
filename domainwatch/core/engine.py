@@ -44,6 +44,17 @@ class Engine:
         state = self.providers.check(domain)
         from ..metrics import inc_check, observe_latency
         inc_check(domain, state.available, bool(state.error))
+        # enrich missing metadata from RDAP (registrar/expiration/nameservers)
+        if not state.error and (state.expiration is None or state.registrar is None):
+            try:
+                fb = RdapProvider().check(domain)
+                if not fb.error:
+                    state.expiration = state.expiration or fb.expiration
+                    state.registrar = state.registrar or fb.registrar
+                    state.nameservers = state.nameservers or fb.nameservers
+                    state.status = state.status or fb.status
+            except Exception:
+                pass
         self.db.record_check(state)
         self._diff_and_emit(state, target_price)
         self._dns_change_detection(domain)
