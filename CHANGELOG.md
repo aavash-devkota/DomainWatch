@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.5.2 (2026-10-04)
+- Certificate Transparency monitoring: `domain-monitor ct` (crt.sh with certspotter fallback), `--track` baseline with NEW CERTIFICATE alerts, `ct_seen` migration
+- Subdomain discovery via CT SAN aggregation: `domain-monitor subdomains [--resolve]`
+
 ## v0.5.1 (2026-10-04)
 - Domain Opportunity Score (`domain-monitor score`): transparent, config-overridable weights for availability/price/TLD/brandability/history/risk; `discover` output now ranks by score
 
