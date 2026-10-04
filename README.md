@@ -127,18 +127,41 @@ domain-monitor expiration example.com
 
 Global flags: `--version`, `-c/--config PATH`.
 
-Example output — `domain-monitor audit example.com`:
+Example output — `domain-monitor audit facebook.com`:
 
 ```
-Domain Security Audit: example.com
-Score: 90/100
+Domain Security Audit: facebook.com
+Score: 80/100
 
-DNSSEC         ✓
-SPF            ✓  v=spf1 -all
-DMARC          ✓  v=DMARC1;p=reject;…
-CAA            ✗  missing
-MX             ✓  0 .
-HTTPS/TLS      ✓  SSL Corporation
+DNSSEC         ✗  
+SPF            ✓  v=spf1 redirect=_spf.facebook.com
+DMARC          ✓  v=DMARC1; p=reject; …
+CAA            ✓  0 issue "digicert.com; …"
+MX             ✓  10 smtpin.vvv.facebook.com.
+HTTPS/TLS      ✓  DigiCert Inc
+```
+
+Example output — `domain-monitor price-compare cveguard.com`:
+
+```
+Registrar        Register      Renew   Transfer  Avail      Src
+Porkbun             $9.73     $11.15      $9.73     no  catalog
+Cloudflare          $9.77      $9.77      $9.77     no  catalog
+Namecheap          $13.98     $15.98     $13.98     no  catalog
+GoDaddy            $11.99     $19.99     $11.99     no  catalog
+Dynadot             $9.49     $10.49      $9.49     no  catalog
+```
+
+Example output — `domain-monitor doctor`:
+
+```
+✓ Python 3.14
+✓ Configuration
+✓ SQLite database (~/.domainwatch/domainwatch.db)
+✓ DNS resolver
+✓ RDAP connectivity
+✓ GoDaddy CLI
+✗ GoDaddy auth (expired)
 ```
 
 ---

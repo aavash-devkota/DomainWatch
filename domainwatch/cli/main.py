@@ -196,18 +196,18 @@ def cmd_run(args) -> int:
             eng.db.add_domain(str(d))
     interval = args.interval or get(cfg, "monitor", "interval", default=300)
     adaptive = AdaptiveInterval(base=float(interval))
-    print(f"Monitoring every ~{interval}s (adaptive backoff on errors). Ctrl+C to stop.")
+    print(f"Monitoring every ~{interval}s (adaptive backoff on errors). Ctrl+C to stop.", flush=True)
     while True:
         ok = True
         for st in eng.check_all():
             if st.error:
                 ok = False
-                print(f"[x] {st.domain}: {st.error}")
+                print(f"[x] {st.domain}: {st.error}", flush=True)
             elif st.available:
                 price = f"${st.price:,.2f}" if st.price is not None else "?"
-                print(f"[+] {st.domain}: AVAILABLE {price}")
+                print(f"[+] {st.domain}: AVAILABLE {price}", flush=True)
             else:
-                print(f"[x] {st.domain}: taken")
+                print(f"[x] {st.domain}: taken", flush=True)
         adaptive.wait(ok)
 
 
