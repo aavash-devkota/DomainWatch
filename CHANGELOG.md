@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.5.0 (2026-10-04)
+- Provider architecture finalized: base Provider, GoDaddy, RDAP, plus multi-registrar offer providers (Porkbun/Cloudflare/Namecheap/Dynadot) via providers/registry.py
+- Normalized DomainOffer model (register/renew/transfer/currency/premium/source)
+- `domain-monitor price-compare` with live-or-catalog pricing and RDAP availability
+
 ## v0.4.0 (2026-10-04)
 - Database migrations + `domain-monitor db migrate|status|backup`
 - ProviderManager with health/fallback/latency stats (`domain-monitor providers`)
