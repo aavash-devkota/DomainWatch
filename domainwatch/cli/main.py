@@ -370,6 +370,21 @@ def cmd_http(args) -> int:
     return 0
 
 
+def cmd_price_compare(args) -> int:
+    from ..providers import registry
+    offers = registry.compare(args.domain)
+    print(f"\n{'Registrar':<14} {'Register':>10} {'Renew':>10} {'Transfer':>10} {'Avail':>6} {'Src':>8}")
+    print("-" * 64)
+    for o in offers:
+        if o.error:
+            print(f"{o.registrar:<14} ERROR: {o.error[:40]}")
+            continue
+        row = o.as_row()
+        print(f"{row['Registrar']:<14} {row['Register']:>10} {row['Renew']:>10} {row['Transfer']:>10} {row['Avail']:>6} {row['Src']:>8}")
+    print("\nSrc: live = live API/CLI price, catalog = estimated TLD list")
+    return 0
+
+
 def cmd_lifecycle(args) -> int:
     from ..core.lifecycle import classify, days_until
     db = DB()
@@ -405,6 +420,7 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("tls"); s.add_argument("domain"); s.set_defaults(func=cmd_tls)
     s = sub.add_parser("http"); s.add_argument("domain"); s.set_defaults(func=cmd_http)
     s = sub.add_parser("lifecycle"); s.add_argument("domain"); s.set_defaults(func=cmd_lifecycle)
+    s = sub.add_parser("price-compare"); s.add_argument("domain"); s.set_defaults(func=cmd_price_compare)
     s = sub.add_parser("history"); s.add_argument("domain"); s.set_defaults(func=cmd_history)
     s = sub.add_parser("price"); s.add_argument("domain"); s.set_defaults(func=cmd_price)
     s = sub.add_parser("expiration"); s.add_argument("domain"); s.set_defaults(func=cmd_expiration)
