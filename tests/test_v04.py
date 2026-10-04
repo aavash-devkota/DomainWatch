@@ -27,6 +27,14 @@ def test_lifecycle(tmp_path):
     assert classify(False, None, "pending delete") == Lifecycle.PENDING_DELETE
 
 
+def test_score():
+    from domainwatch.core.score import score_domain
+    s = score_domain("sophic.dev", True, 9.99, False)
+    assert 0 <= s.total <= 100 and s.parts["availability"] == 20
+    s2 = score_domain("cyber-security-login.com", False, 1200, True)
+    assert s2.total < s.total
+
+
 def test_migrate_idempotent(tmp_path):
     db = DB(tmp_path / "t.db")
     assert migrate.migrate(db.conn) == []

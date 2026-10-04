@@ -171,12 +171,17 @@ def cmd_discover(args) -> int:
     candidates |= {f"{p}{base}.com" for p in prefixes}
     candidates |= {f"{base}{s}.com" for s in suffixes}
     eng = _engine(args)
+    from ..core.score import score_domain
+    ranked = []
     for c in sorted(candidates):
         st = eng.check_one(c, args.target)
         mark = "AVAILABLE" if st.available else (st.error or "taken")
         price = f" ${st.price:,.2f}" if st.price else ""
-        print(f"{c:<35} {mark}{price}")
+        s = score_domain(c, st.available, st.price, st.premium)
+        ranked.append((s.total, c, mark, price))
         time.sleep(0.5)
+    for total, c, mark, price in sorted(ranked, reverse=True):
+        print(f"{c:<35} {mark}{price}   score {total}")
     return 0
 
 
@@ -370,6 +375,25 @@ def cmd_http(args) -> int:
     return 0
 
 
+def cmd_score(args) -> int:
+    from ..core.score import score_domain
+    from ..config import load_config, get
+    cfg = load_config(args.config)
+    weights = get(cfg, "scoring", "weights", default=None)
+    eng = _engine(args)
+    st = eng.check_one(args.domain, None)
+    created = None
+    try:
+        info = rdap_client.parse_rdap(rdap_client.rdap_lookup(args.domain).get("raw") or {})
+        created = info.get("created")
+    except Exception:
+        pass
+    res = score_domain(args.domain, st.available, st.price, st.premium,
+                       created=created, status=st.status, weights=weights)
+    print(res.render())
+    return 0
+
+
 def cmd_price_compare(args) -> int:
     from ..providers import registry
     offers = registry.compare(args.domain)
@@ -421,6 +445,7 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("http"); s.add_argument("domain"); s.set_defaults(func=cmd_http)
     s = sub.add_parser("lifecycle"); s.add_argument("domain"); s.set_defaults(func=cmd_lifecycle)
     s = sub.add_parser("price-compare"); s.add_argument("domain"); s.set_defaults(func=cmd_price_compare)
+    s = sub.add_parser("score"); s.add_argument("domain"); s.set_defaults(func=cmd_score)
     s = sub.add_parser("history"); s.add_argument("domain"); s.set_defaults(func=cmd_history)
     s = sub.add_parser("price"); s.add_argument("domain"); s.set_defaults(func=cmd_price)
     s = sub.add_parser("expiration"); s.add_argument("domain"); s.set_defaults(func=cmd_expiration)
