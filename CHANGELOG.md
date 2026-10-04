@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.3.0 (2026-10-04)
+- Web terminal page in the dashboard (⌘ Terminal tab) with scrollback, clear, Enter-to-run
+- `/terminal` POST endpoint runs domain-monitor subcommands only (allowlist, no shell operators/redirects), 60s timeout
+
 ## v1.2.0 (2026-10-04)
 - Dashboard redesign: left sidebar navigation (Dashboard/Domains/Events/Tools/Providers/Alerts & Keys/Settings), live clock, glassmorphism panels with blur, badge pills for status, canvas price chart, hover row highlight, toast notifications, overview landing page with stat cards and mini event feed
 
