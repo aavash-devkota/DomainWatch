@@ -1,5 +1,9 @@
 # DomainWatch
 
+[![CI](https://github.com/aavash-devkota/DomainWatch/actions/workflows/tests.yml/badge.svg)](https://github.com/aavash-devkota/DomainWatch/actions/workflows/tests.yml)
+[![Docs](https://github.com/aavash-devkota/DomainWatch/actions/workflows/docs.yml/badge.svg)](https://github.com/aavash-devkota/DomainWatch/actions/workflows/docs.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **Domain availability, price, expiration, DNS and security monitoring from one CLI.**
 
 Think *UptimeRobot for domains*: DomainWatch continuously watches domain names,
