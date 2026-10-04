@@ -394,6 +394,47 @@ def cmd_score(args) -> int:
     return 0
 
 
+def cmd_ct(args) -> int:
+    from .. import ct
+    from ..core.models import Event, Severity
+    try:
+        entries = ct.fetch(args.domain)
+    except Exception as e:
+        print(f"CT fetch failed: {e}"); return 1
+    print(f"Latest certificates for {args.domain} ({len(entries)}):\n")
+    db = DB()
+    for e in entries[:15]:
+        sans = ", ".join(e.sans()[:4])
+        print(f"  {e.not_before[:19]}  {sans}\n      issuer: {e.issuer[:60]}")
+        if args.track:
+            row = db.conn.execute(
+                "SELECT id FROM ct_seen WHERE domain=? AND cert_id=?", (args.domain, e.cert_id)).fetchone()
+            if row is None:
+                print(f"      ⚠ NEW CERTIFICATE detected: {e.sans()[0]} ({e.issuer[:40]})")
+                db.conn.execute(
+                    "INSERT OR IGNORE INTO ct_seen(domain, issuer_name, name_value, not_before, cert_id) VALUES(?,?,?,?,?)",
+                    (args.domain, e.issuer, e.name_value, e.not_before, e.cert_id))
+    db.conn.commit()
+    return 0
+
+
+def cmd_subdomains(args) -> int:
+    from .. import ct
+    subs = ct.subdomains(args.domain)
+    print(f"Found {len(subs)} subdomains for {args.domain}:\n")
+    for s in subs:
+        if args.resolve:
+            try:
+                import socket
+                ip = socket.gethostbyname(s)
+                print(f"  {s:<40} {ip}")
+            except Exception:
+                print(f"  {s:<40} (no A record)")
+        else:
+            print(f"  {s}")
+    return 0
+
+
 def cmd_price_compare(args) -> int:
     from ..providers import registry
     offers = registry.compare(args.domain)
@@ -444,6 +485,8 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("tls"); s.add_argument("domain"); s.set_defaults(func=cmd_tls)
     s = sub.add_parser("http"); s.add_argument("domain"); s.set_defaults(func=cmd_http)
     s = sub.add_parser("lifecycle"); s.add_argument("domain"); s.set_defaults(func=cmd_lifecycle)
+    s = sub.add_parser("ct"); s.add_argument("domain"); s.add_argument("--track", action="store_true"); s.set_defaults(func=cmd_ct)
+    s = sub.add_parser("subdomains"); s.add_argument("domain"); s.add_argument("--resolve", action="store_true"); s.set_defaults(func=cmd_subdomains)
     s = sub.add_parser("price-compare"); s.add_argument("domain"); s.set_defaults(func=cmd_price_compare)
     s = sub.add_parser("score"); s.add_argument("domain"); s.set_defaults(func=cmd_score)
     s = sub.add_parser("history"); s.add_argument("domain"); s.set_defaults(func=cmd_history)
