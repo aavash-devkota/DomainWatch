@@ -1,90 +1,123 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import time
-from datetime import datetime, timezone
 from typing import Optional
 
-from ..core.models import DomainState, Event
+from ..core.models import DomainState, Event, Severity
+from ..dns import records
 from ..events.bus import EventBus
 from ..providers.base import Provider
 from ..providers.godaddy import GoDaddyProvider
+from ..providers.manager import ProviderManager
 from ..providers.rdap_provider import RdapProvider
 from ..storage.db import DB
+from .alerts import AlertEngine
+from .lifecycle import Lifecycle, classify, days_until
 
 EXPIRING_SOON_DAYS = 30
 
 
-def _days_until(iso: Optional[str]) -> Optional[float]:
-    if not iso:
-        return None
-    try:
-        dt = datetime.fromisoformat(iso.replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return (dt - datetime.now(timezone.utc)).total_seconds() / 86400
-    except ValueError:
-        return None
+def dns_fingerprint(domain: str) -> dict[str, str]:
+    data = records.lookup(domain)
+    return {t: hashlib.sha256(json.dumps(v).encode()).hexdigest()[:16]
+            for t, v in data.items() if v}
 
 
 class Engine:
-    def __init__(self, db: Optional[DB] = None, provider: Optional[Provider] = None):
+    def __init__(self, db: Optional[DB] = None, provider: Optional[Provider] = None,
+                 providers: Optional[list[Provider]] = None):
         self.db = db or DB()
-        self.provider = provider or GoDaddyProvider()
-        self.fallback = RdapProvider()
+        if providers is not None:
+            self.providers = ProviderManager(providers)
+        elif provider is not None:
+            self.providers = ProviderManager([provider, RdapProvider()])
+        else:
+            self.providers = ProviderManager([GoDaddyProvider(), RdapProvider()])
         self.bus = EventBus()
+        self.alerts = AlertEngine(self.db)
 
     def check_one(self, domain: str, target_price: Optional[float] = None) -> DomainState:
-        state = self.provider.check(domain)
-        if state.error:
-            fb = self.fallback.check(domain)
-            if not fb.error:
-                fb.price = state.price
-                state = fb
+        state = self.providers.check(domain)
         self.db.record_check(state)
         self._diff_and_emit(state, target_price)
+        self._dns_change_detection(domain)
         return state
+
+    def _emit(self, ev: Event) -> None:
+        self.db.record_event(ev.type, ev.domain, ev.message, {**ev.data, "severity": ev.severity})
+        if self.alerts.process(ev):
+            self.bus.emit(ev)
 
     def _diff_and_emit(self, state: DomainState, target_price: Optional[float]) -> None:
         domain = state.domain
-        prev = None
         rows = self.db.history(domain, limit=2)
-        if len(rows) >= 2:
-            prev = rows[1]
+        prev = rows[1] if len(rows) >= 2 else None
 
-        if state.available is True:
-            was_avail = bool(prev["available"]) if prev and prev["available"] is not None else None
-            if was_avail is not True:
-                self._emit(Event("DomainAvailable", domain, f"{domain} is AVAILABLE",
-                                 {"price": state.price}))
-        if state.price is not None and prev and prev["price"] is not None:
-            if state.price < prev["price"]:
-                pct = (1 - state.price / prev["price"]) * 100
-                self._emit(Event("PriceDropped", domain,
-                                 f"{domain} price dropped {prev['price']} -> ${state.price:.2f} (-{pct:.0f}%)",
-                                 {"old": prev["price"], "new": state.price}))
-        if target_price is not None and state.price is not None and state.available:
-            if state.price <= target_price:
-                self._emit(Event("PriceBelowThreshold", domain,
-                                 f"{domain} available for ${state.price:.2f} (target ${target_price:.2f})",
-                                 {"price": state.price, "target": target_price}))
-        days = _days_until(state.expiration)
-        if days is not None and 0 < days <= EXPIRING_SOON_DAYS:
-            self._emit(Event("ExpirationApproaching", domain,
-                             f"{domain} expires in {days:.0f} days ({state.expiration})",
-                             {"days": days}))
+        lifecycle = classify(state.available, state.expiration, state.status)
+        if lifecycle == Lifecycle.PENDING_DELETE:
+            self._emit(Event("PendingDeleteDetected", domain, f"{domain} is PENDING DELETE",
+                             {}, Severity.CRITICAL))
+        elif lifecycle == Lifecycle.EXPIRED:
+            self._emit(Event("DomainExpired", domain, f"{domain} has EXPIRED", {}, Severity.CRITICAL))
+
+        if state.available is True and (prev is None or not bool(prev["available"])):
+            self._emit(Event("DomainAvailable", domain, f"{domain} is AVAILABLE",
+                             {"price": state.price}, Severity.NOTICE))
+
+        if state.price is not None and prev and prev["price"] is not None and state.price < prev["price"]:
+            pct = (1 - state.price / prev["price"]) * 100
+            self._emit(Event("PriceDropped", domain,
+                             f"{domain} price dropped ${prev['price']:.2f} -> ${state.price:.2f} (-{pct:.0f}%)",
+                             {"old_price": prev["price"], "price": state.price}, Severity.INFO))
+
+        if target_price is not None and state.available and state.price is not None and state.price <= target_price:
+            self._emit(Event("PriceBelowThreshold", domain,
+                             f"{domain} available for ${state.price:.2f} (target ${target_price:.2f})",
+                             {"price": state.price, "target_price": target_price}, Severity.NOTICE))
+
+        days = days_until(state.expiration)
+        if days is not None:
+            if days <= 14:
+                sev = Severity.WARNING
+            elif days <= EXPIRING_SOON_DAYS:
+                sev = Severity.NOTICE
+            else:
+                sev = None
+            if sev:
+                self._emit(Event("ExpirationApproaching", domain,
+                                 f"{domain} expires in {days:.0f} days", {"days": days}, sev))
         if state.premium:
-            self._emit(Event("PremiumDomain", domain, f"{domain} is a premium/aftermarket name", {}))
+            self._emit(Event("PremiumDomain", domain, f"{domain} is premium/aftermarket", {}, Severity.INFO))
 
-    def _emit(self, ev: Event) -> None:
-        self.db.record_event(ev.type, ev.domain, ev.message, ev.data)
-        self.bus.emit(ev)
+    def _dns_change_detection(self, domain: str) -> None:
+        try:
+            fp = dns_fingerprint(domain)
+        except Exception:
+            return
+        rows = self.db.conn.execute(
+            "SELECT record_type, hash, value FROM dns_history WHERE domain=? AND id IN "
+            "(SELECT MAX(id) FROM dns_history WHERE domain=? GROUP BY record_type)",
+            (domain, domain)).fetchall()
+        prev = {r["record_type"]: r["hash"] for r in rows}
+        for t, h in fp.items():
+            if t in prev and prev[t] != h:
+                sev = Severity.WARNING if t in ("NS", "MX", "CAA") else Severity.NOTICE
+                self._emit(Event("DNSChanged", domain, f"{domain} {t} records changed",
+                                 {"record_type": t}, sev))
+            if t not in prev or prev[t] != h:
+                for v in records.lookup(domain, [t]).get(t, []):
+                    self.db.conn.execute(
+                        "INSERT INTO dns_history(domain, record_type, value, hash) VALUES(?,?,?,?)",
+                        (domain, t, v, h))
+        self.db.conn.commit()
 
-    def check_all(self, target: Optional[dict[str, float]] = None) -> list[DomainState]:
+    def check_all(self) -> list[DomainState]:
         states = []
         for row in self.db.list_domains():
             if not row["enabled"]:
                 continue
-            t = (target or {}).get(row["domain"], row["target_price"])
-            states.append(self.check_one(row["domain"], t))
+            states.append(self.check_one(row["domain"], row["target_price"]))
             time.sleep(1)
         return states

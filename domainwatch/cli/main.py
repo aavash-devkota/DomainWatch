@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 
 from .. import __version__
@@ -212,6 +213,177 @@ def cmd_monitor(args) -> int:
     return cmd_run(args)
 
 
+def cmd_db(args) -> int:
+    from ..storage import migrate
+    db = DB()
+    if args.action == "migrate":
+        applied = migrate.migrate(db.conn)
+        print(f"Applied migrations: {applied or 'none (up to date)'}")
+    elif args.action == "status":
+        s = migrate.status(db.conn)
+        print(f"Schema version: {s['current_version']}")
+        print(f"Available: {', '.join(s['available_migrations'])}")
+    else:
+        return cmd_backup(args)
+    return 0
+
+
+def cmd_providers(args) -> int:
+    eng = _engine(args)
+    print("Running live probes…")
+    eng.providers.check("example.com")
+    for name, h in eng.providers.health().items():
+        st = eng.providers.stats()[name]
+        print(f"{name:<12} {h:<10} ok={st['ok']} fail={st['fail']} avg={st['avg_ms']:.0f}ms {st['last_error'] or ''}")
+    return 0
+
+
+def cmd_watch(args) -> int:
+    from ..core.lifecycle import classify, days_until
+    db = DB()
+    for d in args.domains:
+        db.add_domain(d)
+    eng = _engine(args)
+    interval = args.interval
+    print(f"DomainWatch v{__version__} — watching…\n")
+    while True:
+        states = eng.check_all()
+        print(f"\n{datetime.now():%H:%M:%S} sweep:")
+        for st in states:
+            lc = classify(st.available, st.expiration, st.status)
+            if st.error:
+                print(f"✗ {st.domain:<28} {st.error}")
+            elif st.available:
+                price = f"${st.price:,.2f}" if st.price else "?"
+                print(f"★ {st.domain:<28} AVAILABLE  {price}")
+            else:
+                days = days_until(st.expiration)
+                warn = f" ⚠ expires in {days:.0f}d" if days is not None and days <= 30 else ""
+                price = f"${st.price:,.2f}" if st.price else ""
+                print(f"✓ {st.domain:<28} {lc.value:<12} {price}{warn}")
+        print(f"Next sweep in {interval}s\n")
+        time.sleep(interval)
+
+
+def cmd_doctor(args) -> int:
+    import shutil, socket, sqlite3, subprocess
+    from ..rdap import client as r
+    ok = lambda b: "✓" if b else "✗"
+    print("DomainWatch Doctor\n")
+    print(f"{ok(True)} Python {sys.version.split()[0]}")
+    try:
+        load_config(args.config); print(f"{ok(True)} Configuration")
+    except Exception as e:
+        print(f"✗ Configuration: {e}")
+    try:
+        db = DB(); db.conn.execute("SELECT 1"); print(f"{ok(True)} SQLite database ({db.path})")
+    except Exception as e:
+        print(f"✗ SQLite: {e}")
+    try:
+        socket.gethostbyname("example.com"); print(f"{ok(True)} DNS resolver")
+    except Exception:
+        print("✗ DNS resolver")
+    try:
+        r.rdap_lookup("example.com"); print(f"{ok(True)} RDAP connectivity")
+    except Exception as e:
+        print(f"✗ RDAP: {e}")
+    gd = shutil.which("gddy")
+    print(f"{ok(bool(gd))} GoDaddy CLI {gd or '(missing)'}")
+    if gd:
+        p = subprocess.run(["gddy", "auth", "status"], capture_output=True, text=True, timeout=10)
+        expired = '"expired": true' in p.stdout
+        print(f"{ok(not expired)} GoDaddy auth {'(expired)' if expired else '(ok)'}")
+    cfg = load_config(args.config)
+    tel = get(cfg, "notifications", "telegram", "enabled", default=False)
+    print(f"{ok(False) if tel else ok(True)} Telegram config {'enabled' if tel else 'not configured'}")
+    print(f"\nLog: ~/.domainwatch/domainwatch.db")
+    return 0
+
+
+def _export_rows():
+    db = DB()
+    return [dict(r) for r in db.list_domains()]
+
+
+def cmd_export(args) -> int:
+    import csv, json, yaml as y
+    rows = _export_rows()
+    fmt = args.format
+    out = args.output or f"domains.{fmt if fmt != 'yaml' else 'yml'}"
+    if fmt == "json":
+        Path(out).write_text(json.dumps(rows, indent=2, default=str))
+    elif fmt == "csv":
+        with open(out, "w", newline="") as f:
+            w = csv.DictWriter(f, fieldnames=rows[0].keys() if rows else ["domain"])
+            w.writeheader(); w.writerows(rows)
+    else:
+        Path(out).write_text(y.safe_dump(rows))
+    print(f"Exported {len(rows)} domains to {out}")
+    return 0
+
+
+def cmd_import(args) -> int:
+    import json, yaml as y
+    data = y.safe_load(Path(args.file).read_text()) if args.file.endswith((".yml", ".yaml")) else json.loads(Path(args.file).read_text())
+    db = DB()
+    for d in data:
+        if isinstance(d, dict):
+            db.add_domain(d["domain"], d.get("target_price"))
+        else:
+            db.add_domain(str(d))
+    print(f"Imported {len(data)} domains")
+    return 0
+
+
+def cmd_backup(args) -> int:
+    import shutil
+    from datetime import datetime as dt
+    db = DB()
+    out = args.output or f"domainwatch-{dt.now():%Y-%m-%d}.db"
+    shutil.copy2(db.path, out)
+    print(f"Backup written to {out}")
+    return 0
+
+
+def cmd_tls(args) -> int:
+    from ..security import tls
+    i = tls.inspect(args.domain)
+    if not i.ok:
+        print(f"TLS error: {i.error}"); return 1
+    print(f"Subject: {i.subject}\nIssuer: {i.issuer}\nVersion: {i.version}\n"
+          f"Valid: {i.not_before} → {i.not_after} ({i.days_remaining:.0f} days left)\n"
+          f"SANs: {', '.join(i.sans[:5])}")
+    if i.days_remaining is not None and i.days_remaining < 14:
+        print(f"⚠ certificate expires in {i.days_remaining:.0f} days")
+    return 0
+
+
+def cmd_http(args) -> int:
+    from ..security import httpmon
+    r = httpmon.check(args.domain)
+    if not r.ok:
+        print(f"HTTP error: {r.error}"); return 1
+    print(f"Status: {r.status}  {r.elapsed_ms:.0f}ms\nHTTPS redirect: {r.https_redirect}")
+    present = [h for h in r.headers if h in r.headers]
+    for h in ("strict-transport-security", "content-security-policy", "x-content-type-options", "x-frame-options", "referrer-policy"):
+        print(f"  {h:<30} {'✓' if h in r.headers else '✗ MISSING'}")
+    return 0
+
+
+def cmd_lifecycle(args) -> int:
+    from ..core.lifecycle import classify, days_until
+    db = DB()
+    last = db.last_check(args.domain)
+    if last:
+        lc = classify(bool(last["available"]) if last["available"] is not None else None, last["expiration"], last["status"])
+        print(f"{args.domain}: {lc.value} (expires {last['expiration'] or 'unknown'})")
+    else:
+        info = rdap_client.parse_rdap(rdap_client.rdap_lookup(args.domain).get("raw") or {})
+        lc = classify(info.get("available"), info.get("expiration"))
+        print(f"{args.domain}: {lc.value} (expires {info.get('expiration','unknown')})")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="domain-monitor", description="DomainWatch CLI")
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
@@ -223,6 +395,16 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("remove"); s.add_argument("domains", nargs="+"); s.set_defaults(func=cmd_remove)
     sub.add_parser("list").set_defaults(func=cmd_list)
     sub.add_parser("status").set_defaults(func=cmd_status)
+    s = sub.add_parser("db"); s.add_argument("action", choices=["migrate", "status", "backup"]); s.add_argument("--output"); s.set_defaults(func=cmd_db)
+    sub.add_parser("providers").set_defaults(func=cmd_providers)
+    s = sub.add_parser("watch"); s.add_argument("domains", nargs="*"); s.add_argument("-i", "--interval", type=float, default=300); s.add_argument("-v", "--verbose", action="store_true"); s.set_defaults(func=cmd_watch)
+    sub.add_parser("doctor").set_defaults(func=cmd_doctor)
+    s = sub.add_parser("export"); s.add_argument("output", nargs="?"); s.add_argument("--format", choices=["json", "csv", "yaml"], default="json"); s.set_defaults(func=cmd_export)
+    s = sub.add_parser("import"); s.add_argument("file"); s.set_defaults(func=cmd_import)
+    s = sub.add_parser("backup"); s.add_argument("--output"); s.set_defaults(func=cmd_backup)
+    s = sub.add_parser("tls"); s.add_argument("domain"); s.set_defaults(func=cmd_tls)
+    s = sub.add_parser("http"); s.add_argument("domain"); s.set_defaults(func=cmd_http)
+    s = sub.add_parser("lifecycle"); s.add_argument("domain"); s.set_defaults(func=cmd_lifecycle)
     s = sub.add_parser("history"); s.add_argument("domain"); s.set_defaults(func=cmd_history)
     s = sub.add_parser("price"); s.add_argument("domain"); s.set_defaults(func=cmd_price)
     s = sub.add_parser("expiration"); s.add_argument("domain"); s.set_defaults(func=cmd_expiration)

@@ -56,6 +56,8 @@ class DB:
         self.conn = sqlite3.connect(str(self.path))
         self.conn.row_factory = sqlite3.Row
         self.conn.executescript(SCHEMA)
+        from . import migrate
+        migrate.migrate(self.conn)
 
     def add_domain(self, domain: str, target_price: Optional[float] = None) -> None:
         self.conn.execute(
@@ -108,6 +110,12 @@ class DB:
             (type, domain, message, json.dumps(data or {})),
         )
         self.conn.commit()
+
+    def recent_event(self, type: str, domain: str, since_seconds: float) -> Optional[sqlite3.Row]:
+        return self.conn.execute(
+            "SELECT * FROM events WHERE type=? AND domain=? AND timestamp >= datetime('now', ?) ORDER BY id DESC LIMIT 1",
+            (type, domain, f"-{int(since_seconds)} seconds"),
+        ).fetchone()
 
     def events(self, domain: Optional[str] = None, limit: int = 50) -> list[sqlite3.Row]:
         if domain:

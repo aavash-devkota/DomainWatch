@@ -34,13 +34,26 @@ class DomainState:
         return d
 
 
+class Severity:
+    INFO = "INFO"
+    NOTICE = "NOTICE"
+    WARNING = "WARNING"
+    CRITICAL = "CRITICAL"
+
+
 @dataclass
 class Event:
     type: str          # DomainAvailable, PriceDropped, PriceBelowThreshold, ExpirationApproaching, ...
     domain: str
     message: str
     data: dict[str, Any] = field(default_factory=dict)
+    severity: str = Severity.INFO
     ts: float = field(default_factory=time.time)
 
     def pretty(self) -> str:
-        return f"[{datetime.fromtimestamp(self.ts):%Y-%m-%d %H:%M:%S}] {self.type}: {self.message}"
+        return f"[{datetime.fromtimestamp(self.ts):%Y-%m-%d %H:%M:%S}] [{self.severity}] {self.type}: {self.message}"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"event": self.type, "domain": self.domain, "message": self.message,
+                "severity": self.severity, "timestamp": datetime.fromtimestamp(self.ts).isoformat(),
+                **self.data}
