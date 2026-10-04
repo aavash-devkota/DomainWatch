@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.1.3 (2026-10-04)
+- Tools tab is multi-select: checkboxes for every tool, Select all / Clear buttons, and "Run selected" executes the chosen set and concatenates labeled results
+
 ## v1.1.2 (2026-10-04)
 - UI refresh: gradient header, glass cards, pill tabs, hover states, softer dark palette
 - Selective results: live filter boxes on tables + tool output in the GUI; `--only-available` and `--workers N` concurrency for `check` and `discover` in the CLI
