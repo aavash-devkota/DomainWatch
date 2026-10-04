@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.0 (2026-10-04)
+- Dockerfile + docker-compose (serve on :8080, SQLite volume)
+- CI: ruff + pytest across Python 3.10/3.12, dependabot, docs deploy to GitHub Pages
+- MkDocs Material documentation site (install, CLI, config, API, architecture, contributing)
+
 ## v0.7.0 (2026-10-04)
 - Team support: API keys with roles (admin/operator/viewer/auditor), audit log table, `/keys` + `/audit` endpoints, `domain-monitor keys` CLI, `DW_AUTH=1` enforces keys
 
