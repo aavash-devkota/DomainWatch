@@ -1,5 +1,8 @@
 # Changelog
 
+## v0.5.1 (2026-10-04)
+- Domain Opportunity Score (`domain-monitor score`): transparent, config-overridable weights for availability/price/TLD/brandability/history/risk; `discover` output now ranks by score
+
 ## v0.5.0 (2026-10-04)
 - Provider architecture finalized: base Provider, GoDaddy, RDAP, plus multi-registrar offer providers (Porkbun/Cloudflare/Namecheap/Dynadot) via providers/registry.py
 - Normalized DomainOffer model (register/renew/transfer/currency/premium/source)
