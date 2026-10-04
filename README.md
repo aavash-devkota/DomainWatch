@@ -17,11 +17,14 @@ security posture, and fires alerts to your favorite channel.
 - Price history in SQLite (lowest / highest / current / average)
 - RDAP registrar, status, nameservers
 - DNS intelligence: A, AAAA, MX, NS, CNAME, TXT, CAA, SOA, DNSSEC
-- Security audit: SPF, DMARC, DKIM-adjacent TXT, CAA, MX, TLS
+- Security audit: SPF, DMARC, CAA, MX, TLS scoring
 - Alerts: console, webhook, Discord, ntfy, Telegram
 - Adaptive scheduler with exponential backoff + jitter
-- YAML config, `.env` secrets, plugin-style provider layer
-- MIT licensed
+- Multi-registrar price comparison (Porkbun / Cloudflare / Namecheap / GoDaddy / Dynadot)
+- Domain Opportunity Scoring (`score`)
+- CT monitoring + subdomain discovery
+- Web dashboard with interactive terminal, Prometheus `/metrics`
+- YAML config, `.env` secrets, plugin SDK
 
 ---
 
@@ -50,6 +53,7 @@ security posture, and fires alerts to your favorite channel.
 | Python | ≥ 3.10 | |
 | `gddy` CLI | latest | optional, enables GoDaddy pricing |
 | GoDaddy account | — | optional, for pricing via `gddy` |
+| Docker | any recent | optional, for container deploys |
 
 ### From source (recommended)
 
@@ -125,9 +129,36 @@ domain-monitor expiration example.com
 | `domain-monitor rdap <domain>` | Registrar, created/updated/expires, status, NS |
 | `domain-monitor dns <domain>` | A/AAAA/MX/NS/CNAME/TXT/CAA/SOA |
 | `domain-monitor audit <domain>` | DNSSEC/SPF/DMARC/CAA/MX/TLS security score |
-| `domain-monitor discover <name> [--tlds …] [--prefixes …] [--suffixes …]` | Generate and check candidate names |
+| `domain-monitor discover <name> [--tlds …] [--prefixes …] [--suffixes …] [--workers N] [--only-available]` | Generate and rank candidate names |
+| `domain-monitor score <domain>` | Domain Opportunity Score with transparent breakdown |
+| `domain-monitor price-compare <domain>` | Compare register/renew/transfer across registrars |
+| `domain-monitor watch [d…] [-i SECONDS]` | Live sweep view of tracked domains |
+| `domain-monitor ct <domain> [--track]` | Certificate Transparency log entries |
+| `domain-monitor subdomains <domain> [--resolve]` | Subdomain discovery |
+| `domain-monitor tls <domain>` | TLS certificate details |
+| `domain-monitor http <domain>` | HTTP status + security headers |
+| `domain-monitor lifecycle <domain>` | Registered/expiring/expired/pending delete/available |
+| `domain-monitor report` | Weekly-style report (availability, prices, expiring, events) |
+| `domain-monitor doctor` | Diagnostics |
+| `domain-monitor providers` | Provider health/latency probe |
+| `domain-monitor db migrate\\|status\\|backup` | Schema version, migrations, backups |
+| `domain-monitor keys create\\|list\\|revoke` | API key management |
+| `domain-monitor export\\|import` | JSON/CSV/YAML portfolio export |
+| `domain-monitor backup` | SQLite backup copy |
+| `domain-monitor serve [--host] [--port]` | Web UI + REST API + metrics |
 
-Global flags: `--version`, `-c/--config PATH`.
+Global flags: `--version`, `-c/--config PATH` (before the subcommand).
+
+## Web UI
+
+```bash
+domain-monitor serve
+# open http://localhost:8080/dashboard
+```
+
+Tabs: Dashboard (stat cards, price chart, events), Domains, Events, Tools (multi-select probes),
+Providers, Alerts & Keys, Settings (interval + notifications), Terminal (xterm.js + WebSocket PTY).
+REST docs at `/docs`, Prometheus metrics at `/metrics`.
 
 Example output — `domain-monitor audit facebook.com`:
 
@@ -289,9 +320,9 @@ After=network-online.target
 [Service]
 Type=simple
 User=kali
-WorkingDirectory=/home/kali/Documents/scripts/DomainWatch
+WorkingDirectory=/home/kali/Documents/domainwatch
 EnvironmentFile=%h/.domainwatch/.env
-ExecStart=/usr/local/bin/domain-monitor run -c %h/.domainwatch/config.yaml
+ExecStart=/usr/local/bin/domain-monitor -c %h/.domainwatch/config.yaml run
 Restart=on-failure
 
 [Install]
@@ -300,28 +331,21 @@ EOF
 sudo systemctl enable --now domainwatch
 ```
 
-### Docker (coming soon)
+### Docker
 
-```dockerfile
-# planned: ghcr.io/aavash-devkota/domainwatch
+```bash
+docker build -t domainwatch .
+docker run -p 8080:8080 -v ./data:/root/.domainwatch domainwatch serve --host 0.0.0.0
+# or
+docker compose up -d
 ```
 
-For now, a simple container works:
-
-```dockerfile
-FROM python:3.12-slim
-WORKDIR /app
-COPY . .
-RUN pip install .
-VOLUME /root/.domainwatch
-ENTRYPOINT ["domain-monitor"]
-CMD ["run", "-c", "/root/.domainwatch/config.yaml"]
-```
+Prebuilt images (on tag push): `ghcr.io/aavash-devkota/domainwatch:latest`.
 
 ### Cron-style (single checks)
 
 ```cron
-*/15 * * * * /usr/local/bin/domain-monitor run -c ~/.domainwatch/config.yaml >> ~/domainwatch.log 2>&1
+*/15 * * * * /usr/local/bin/domain-monitor -c ~/.domainwatch/config.yaml run >> ~/domainwatch.log 2>&1
 ```
 
 ---
@@ -346,11 +370,10 @@ git push --tags
 
 ## Roadmap
 
-- v0.4 — Email (SMTP) notifications, DKIM selector probing
-- v0.5 — Domain security score v2 (TLS headers, HTTP redirects)
-- v0.6 — Cloudflare / Namecheap / Porkbun providers
-- v0.7 — FastAPI web dashboard + REST API
-- v1.0 — Docker image, CI/CD, stable plugin API, binary releases
+Completed in v1.x: CT monitoring, subdomain discovery, multi-provider price comparison,
+FastAPI + Prometheus + web dashboard, API keys + roles, Docker, CI/CD, docs site, plugin SDK.
+
+Future: SMTP notifications, DKIM probing, Helm chart, PyPI release.
 
 ---
 
@@ -364,7 +387,7 @@ Contributions are welcome!
 4. New providers/notifiers: implement the matching base class and document config keys
 5. Update `CHANGELOG.md` and this README
 
-Please read [`SECURITY.md`](SECURITY.md) before reporting vulnerabilities (coming soon).
+Please read [docs/contributing.md](docs/contributing.md) before contributing.
 
 ## License
 
