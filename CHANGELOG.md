@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.0.1 (2026-10-04)
+- Check results enriched from RDAP (registrar/expiration/nameservers/status) when provider omits them — `check` now prints taken-domain registrar+expiry
+- `lifecycle` command uses RDAP availability/status for live lookups
+- CT lookup returns empty gracefully for domains with no CT entries (no more spurious error)
+- `watch` prints sweep progress immediately
+
 ## v1.0.0 (2026-10-04)
 - Dockerfile + docker-compose (serve on :8080, SQLite volume)
 - CI: ruff + pytest across Python 3.10/3.12, dependabot, docs deploy to GitHub Pages
