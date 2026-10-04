@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.1.2 (2026-10-04)
+- UI refresh: gradient header, glass cards, pill tabs, hover states, softer dark palette
+- Selective results: live filter boxes on tables + tool output in the GUI; `--only-available` and `--workers N` concurrency for `check` and `discover` in the CLI
+
 ## v1.1.1 (2026-10-04)
 - GUI Settings tab: check-interval control, per-channel notification setup (ntfy/Discord/Telegram), and one-click test alerts; backed by new `/settings` (GET/POST) and `/test-alert` endpoints; config edits audited
 
