@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query
+from fastapi.responses import HTMLResponse
 
 from .. import __version__
 from ..storage.db import DB
@@ -13,6 +14,47 @@ db = DB()
 
 def rows(rs):
     return [dict(r) for r in rs]
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard():
+    from ..core.lifecycle import days_until
+    domains = rows(db.list_domains())
+    alerts = rows(db.events(limit=10))
+    expiring = 0
+    available = 0
+    for d in domains:
+        last = db.last_check(d["domain"])
+        if last:
+            if last["available"]:
+                available += 1
+            du = days_until(last["expiration"])
+            if du is not None and 0 < du <= 30:
+                expiring += 1
+    price_series = []
+    if domains:
+        hist = rows(db.history(domains[0]["domain"], limit=200))
+        price_series = [h["price"] for h in reversed(hist) if h["price"] is not None]
+    # sparkline
+    spark = ""
+    if price_series:
+        mx = max(price_series) or 1
+        spark = "".join("▁▂▃▄▅▆▇█"[int((p / mx) * 7)] for p in price_series)
+    events_html = "".join(f"<li>⚠/★ {e['timestamp']} — {e['message']}</li>" for e in alerts) or "<li>none</li>"
+    html = f"""<html><head><title>DomainWatch</title>
+<style>body{{font-family:monospace;background:#0d1117;color:#c9d1d9;margin:2em}}
+.card{{display:inline-block;border:1px solid #30363d;border-radius:8px;padding:1em 2em;margin:.5em;text-align:center}}
+.num{{font-size:2em;color:#58a6ff}}</style></head><body>
+<h1>DomainWatch</h1>
+<div class="card"><div class="num">{len(domains)}</div>Domains</div>
+<div class="card"><div class="num">{len(alerts)}</div>Recent Events</div>
+<div class="card"><div class="num">{expiring}</div>Expiring ≤30d</div>
+<div class="card"><div class="num">{available}</div>Available</div>
+<h3>Price History ({domains[0]['domain'] if domains else '-'}):</h3>
+<pre style="font-size:1.4em;color:#3fb950">{spark or 'no data'}</pre>
+<h3>Recent Events</h3><ul>{events_html}</ul>
+</body></html>"""
+    return HTMLResponse(html)
 
 
 @app.get("/")
