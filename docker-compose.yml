@@ -1,0 +1,18 @@
+services:
+  domainwatch:
+    build: .
+    image: domainwatch:latest
+    restart: unless-stopped
+    volumes:
+      - ./data:/root/.domainwatch
+    environment:
+      - DW_AUTH=${DW_AUTH:-0}
+    ports:
+      - "8080:8080"
+    command: ["serve", "--host", "0.0.0.0", "--port", "8080"]
+
+  # run a continuous monitor in parallel if you want:
+  # monitor:
+  #   build: .
+  #   volumes: [./data:/root/.domainwatch]
+  #   command: ["run", "-c", "/root/.domainwatch/config.yaml"]

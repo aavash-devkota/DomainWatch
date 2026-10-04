@@ -1,0 +1,14 @@
+site_name: DomainWatch
+site_description: Open-source domain availability, price, expiration, DNS and security monitoring platform
+theme:
+  name: material
+  palette:
+    scheme: slate
+nav:
+  - Home: index.md
+  - Installation: install.md
+  - CLI: cli.md
+  - Configuration: config.md
+  - API: api.md
+  - Architecture: architecture.md
+  - Contributing: contributing.md
