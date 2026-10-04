@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.1.1 (2026-10-04)
+- GUI Settings tab: check-interval control, per-channel notification setup (ntfy/Discord/Telegram), and one-click test alerts; backed by new `/settings` (GET/POST) and `/test-alert` endpoints; config edits audited
+
 ## v1.1.0 (2026-10-04)
 - Interactive dashboard SPA: tabbed UI (Domains / Events / Tools / Providers / Alerts & Keys), add/remove domains, per-domain check button, probe any tool (check/score/audit/price-compare/CT/subdomains/TLS/HTTP/lifecycle/DNS), provider health probe, API key creation, audit log view
 - New API endpoints: `/checks/run/{domain}`, `/price-compare/{domain}`, `/subdomains/{domain}`, `/tls/{domain}`, `/http/{domain}`, `/lifecycle/{domain}`
