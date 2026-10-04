@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.6.3 (2026-10-04)
+- `domain-monitor report`: scheduled-report generator (monitored count, availability, price decreases, expiring, 7d event breakdown)
+
+## v0.6.2 (2026-10-04)
+- Prometheus `/metrics` endpoint + in-memory counters (checks, errors, notifications, provider latency, domains)
+
 ## v0.6.1 (2026-10-04)
 - Web dashboard at `/dashboard`: stat cards (domains, recent events, expiring ≤30d, available), price-history sparkline, recent events feed
 - SQLite `check_same_thread=False` fix for API thread handling
