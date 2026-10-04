@@ -40,6 +40,8 @@ class Engine:
 
     def check_one(self, domain: str, target_price: Optional[float] = None) -> DomainState:
         state = self.providers.check(domain)
+        from ..metrics import inc_check, observe_latency
+        inc_check(domain, state.available, bool(state.error))
         self.db.record_check(state)
         self._diff_and_emit(state, target_price)
         self._dns_change_detection(domain)
@@ -48,6 +50,8 @@ class Engine:
     def _emit(self, ev: Event) -> None:
         self.db.record_event(ev.type, ev.domain, ev.message, {**ev.data, "severity": ev.severity})
         if self.alerts.process(ev):
+            from ..metrics import inc_notification
+            inc_notification()
             self.bus.emit(ev)
 
     def _diff_and_emit(self, state: DomainState, target_price: Optional[float]) -> None:

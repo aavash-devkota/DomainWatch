@@ -16,6 +16,13 @@ def rows(rs):
     return [dict(r) for r in rs]
 
 
+@app.get("/metrics")
+def metrics():
+    from fastapi.responses import PlainTextResponse
+    from ..metrics import render_prometheus
+    return PlainTextResponse(render_prometheus(), media_type="text/plain; version=0.0.4")
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard():
     from ..core.lifecycle import days_until
