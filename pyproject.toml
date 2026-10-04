@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "domainwatch"
+version = "0.3.0"
+description = "Open-source domain availability, price, expiration, DNS and security monitoring platform"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "DomainWatch contributors" }]
+dependencies = [
+    "requests>=2.31",
+    "PyYAML>=6.0",
+    "dnspython>=2.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff>=0.4", "mypy>=1.8"]
+
+[project.scripts]
+domain-monitor = "domainwatch.cli.main:main"
+
+[tool.setuptools.packages.find]
+include = ["domainwatch*"]
+
+[tool.ruff]
+line-length = 110
