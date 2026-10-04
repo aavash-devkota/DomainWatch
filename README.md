@@ -1,75 +1,342 @@
 # DomainWatch
 
-Open-source domain availability, price, expiration, DNS and security monitoring platform.
+**Domain availability, price, expiration, DNS and security monitoring from one CLI.**
 
-Think "UptimeRobot for domains": it watches availability, prices, expiration and DNS
-posture, stores everything in SQLite, and fires alerts to Telegram/Discord/ntfy/webhooks.
+Think *UptimeRobot for domains*: DomainWatch continuously watches domain names,
+tracks registration prices over time, monitors expiration dates, audits DNS/email
+security posture, and fires alerts to your favorite channel.
 
-## Install
+- Availability + price (registration / renewal) via GoDaddy `gddy`, with RDAP fallback
+- Expiration monitoring (registered → expiring → expired → pending delete → available)
+- Price history in SQLite (lowest / highest / current / average)
+- RDAP registrar, status, nameservers
+- DNS intelligence: A, AAAA, MX, NS, CNAME, TXT, CAA, SOA, DNSSEC
+- Security audit: SPF, DMARC, DKIM-adjacent TXT, CAA, MX, TLS
+- Alerts: console, webhook, Discord, ntfy, Telegram
+- Adaptive scheduler with exponential backoff + jitter
+- YAML config, `.env` secrets, plugin-style provider layer
+- MIT licensed
+
+---
+
+## Table of contents
+
+1. [Installation](#installation)
+2. [Quick start](#quick-start)
+3. [CLI reference](#cli-reference)
+4. [Configuration](#configuration)
+5. [Architecture](#architecture)
+6. [Use cases](#use-cases)
+7. [Deployment](#deployment)
+8. [Development](#development)
+9. [Roadmap](#roadmap)
+10. [Contributing](#contributing)
+11. [License](#license)
+
+---
+
+## Installation
+
+### Requirements
+
+| Requirement | Version | Notes |
+|---|---|---|
+| Python | ≥ 3.10 | |
+| `gddy` CLI | latest | optional, enables GoDaddy pricing |
+| GoDaddy account | — | optional, for pricing via `gddy` |
+
+### From source (recommended)
 
 ```bash
+git clone https://github.com/aavash-devkota/DomainWatch.git
+cd DomainWatch
 pip install -e .
 domain-monitor --help
 ```
 
-GoDaddy pricing uses the `gddy` CLI (`gddy auth login`). Without it, RDAP is used as a
-free fallback for availability/registrar/expiry.
-
-## Usage
+For development (pytest, ruff, mypy):
 
 ```bash
-domain-monitor check example.com           # one-off availability/price check
-domain-monitor add example.com -t 15       # track with target price
-domain-monitor list                        # tracked domains
-domain-monitor status                      # latest state of all
-domain-monitor monitor example.com -i 300  # continuous monitoring
-domain-monitor run -c config.yaml          # from config file
-domain-monitor history example.com         # past checks
-domain-monitor price example.com           # price stats (min/max/avg)
-domain-monitor expiration example.com      # expiry date
-domain-monitor rdap example.com            # registrar, nameservers, status
-domain-monitor dns example.com             # A/AAAA/MX/NS/TXT/CAA/SOA
-domain-monitor audit example.com           # SPF/DMARC/DNSSEC/CAA/TLS security audit
-domain-monitor discover example            # candidate name discovery
-domain-monitor timeline example.com        # event timeline
+pip install -e ".[dev]"
 ```
 
-## Config (`config.yaml`)
+### GoDaddy CLI (optional, for live pricing)
+
+```bash
+curl -fsSL https://github.com/godaddy/cli/releases/latest/download/install.sh | bash
+export PATH="$HOME/.local/bin:$PATH"
+gddy auth login        # opens browser, one-time
+```
+
+Without `gddy`, every command except live GoDaddy pricing still works — availability,
+registrar, expiration, nameservers come from RDAP.
+
+### Verify
+
+```bash
+domain-monitor --version
+domain-monitor rdap example.com
+domain-monitor audit example.com
+```
+
+---
+
+## Quick start
+
+```bash
+# Track a domain with a target price ceiling
+domain-monitor add example.com -t 20
+
+# One-off availability + price check
+domain-monitor check example.com
+
+# Continuous monitoring every 5 minutes
+domain-monitor monitor example.com -i 300
+
+# Inspect history, prices, expiry
+domain-monitor history example.com
+domain-monitor price example.com
+domain-monitor expiration example.com
+```
+
+---
+
+## CLI reference
+
+| Command | Description |
+|---|---|
+| `domain-monitor check <d…> [--file domains.txt] [-t TARGET]` | One-off availability/price check |
+| `domain-monitor add <d…> [-t TARGET]` | Track domains with optional target price |
+| `domain-monitor remove <d…>` | Stop tracking |
+| `domain-monitor list` | List tracked domains |
+| `domain-monitor status` | Latest state of all tracked domains |
+| `domain-monitor monitor <d…> [-i SECONDS]` | Add (if new) and start the monitor loop |
+| `domain-monitor run [-c config.yaml] [-i SECONDS]` | Monitor using config file + tracked domains |
+| `domain-monitor history <domain>` | All recorded checks |
+| `domain-monitor price <domain>` | Lowest / highest / current / average price |
+| `domain-monitor expiration <domain>` | Expiration date |
+| `domain-monitor timeline [domain]` | Event timeline (availability, drops, expiry…) |
+| `domain-monitor rdap <domain>` | Registrar, created/updated/expires, status, NS |
+| `domain-monitor dns <domain>` | A/AAAA/MX/NS/CNAME/TXT/CAA/SOA |
+| `domain-monitor audit <domain>` | DNSSEC/SPF/DMARC/CAA/MX/TLS security score |
+| `domain-monitor discover <name> [--tlds …] [--prefixes …] [--suffixes …]` | Generate and check candidate names |
+
+Global flags: `--version`, `-c/--config PATH`.
+
+Example output — `domain-monitor audit example.com`:
+
+```
+Domain Security Audit: example.com
+Score: 90/100
+
+DNSSEC         ✓
+SPF            ✓  v=spf1 -all
+DMARC          ✓  v=DMARC1;p=reject;…
+CAA            ✗  missing
+MX             ✓  0 .
+HTTPS/TLS      ✓  SSL Corporation
+```
+
+---
+
+## Configuration
+
+Config file location: `~/.domainwatch/config.yaml` (override with `-c`).
+See `examples/config.yaml`.
 
 ```yaml
 monitor:
-  interval: 300
+  interval: 300          # seconds between full sweeps
+
 domains:
   - domain: example.com
     target_price: 15
+  - domain: example.dev
+    target_price: 20
+
 notifications:
+  ntfy:
+    enabled: true
+    topic: https://ntfy.sh/my-secret-topic
   discord:
     enabled: true
-    webhook: ${DISCORD_WEBHOOK}
+    webhook: ${DISCORD_WEBHOOK}       # expanded from the environment
+  telegram:
+    enabled: true
+    token: ${TELEGRAM_BOT_TOKEN}
+    chat_id: ${TELEGRAM_CHAT_ID}
+  webhook:
+    enabled: false
+    url: ${WEBHOOK_URL}
 ```
 
-Secrets go in `.env` — never in YAML.
+**Secrets never go in YAML.** Put them in `~/.domainwatch/.env` (see
+`examples/.env.example`) or export them in your shell:
+
+```bash
+export TELEGRAM_BOT_TOKEN=…
+export DISCORD_WEBHOOK=…
+```
+
+Data database: `~/.domainwatch/domainwatch.db` (SQLite).
+Event log: `~/.domain_monitor.log` (legacy script).
+
+---
 
 ## Architecture
 
 ```
-        CLI
-         │
-    Core Engine ──► SQLite (storage)
-         │
-  Event Engine ──► Notifications (console/telegram/discord/ntfy/webhook)
-         │
- Providers (GoDaddy, RDAP)   RDAP   DNS engine
+                 ┌───────────────┐
+                 │      CLI      │  domain-monitor check/run/audit/…
+                 └───────┬───────┘
+                         │
+                 ┌───────▼───────┐
+                 │  Core Engine  │  diff state vs history → events
+                 └───────┬───────┘
+                         │
+        ┌────────────────┼─────────────────┐
+        │                │                 │
+  ┌─────▼─────┐    ┌─────▼─────┐    ┌──────▼─────┐
+  │ Providers │    │   RDAP    │    │  DNS/audit │
+  │ GoDaddy   │    │  client   │    │   engine   │
+  │ RDAP fbk  │    └───────────┘    └────────────┘
+  └───────────┘
+        │
+        ▼
+ ┌──────────────┐     ┌────────────────┐
+ │ Event Engine │────►│ Notifications  │  console / webhook / Discord / ntfy / Telegram
+ └──────┬───────┘     └────────────────┘
+        │
+        ▼
+ ┌──────────────┐
+ │    SQLite    │  domains, checks, events, dns
+ └──────────────┘
 ```
+
+Package layout:
+
+```
+domainwatch/
+├── cli/           argparse CLI (domain-monitor entry point)
+├── core/          models, Engine (monitoring + diff + events)
+├── events/        EventBus (pub/sub)
+├── providers/     base Provider, GoDaddy (gddy), RDAP fallback
+├── rdap/          RDAP client + parsing
+├── dns/           record lookups, SPF/DMARC/CAA/DNSSEC
+├── security/      audit scoring
+├── notifications/ console, webhook, Discord, ntfy, Telegram
+├── scheduler/     adaptive backoff interval
+└── storage/       SQLite DB layer
+```
+
+Adding a provider = implement `check(domain) -> DomainState` in
+`providers/base.py`'s interface and register it — the engine doesn't change.
+
+---
+
+## Use cases
+
+- **Domain investor / buyer**: get alerted when a name drops below your target, or hits
+  pending-delete and becomes registrable.
+- **Security / Blue team**: `audit` reports missing DMARC/SPF/CAA/DNSSEC on customer domains.
+- **Ops / SRE**: watch expiration across your portfolio so nothing lapses.
+- **Brand protection**: track lookalike permutations from `discover` weekly.
+- **Passive recon / CTI**: RDAP + DNS timelines for investigations.
+
+---
+
+## Deployment
+
+### Bare metal / VM
+
+```bash
+pip install -e .
+# run under systemd
+sudo tee /etc/systemd/system/domainwatch.service <<'EOF'
+[Unit]
+Description=DomainWatch monitor
+After=network-online.target
+
+[Service]
+Type=simple
+User=kali
+WorkingDirectory=/home/kali/Documents/scripts/DomainWatch
+EnvironmentFile=%h/.domainwatch/.env
+ExecStart=/usr/local/bin/domain-monitor run -c %h/.domainwatch/config.yaml
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl enable --now domainwatch
+```
+
+### Docker (coming soon)
+
+```dockerfile
+# planned: ghcr.io/aavash-devkota/domainwatch
+```
+
+For now, a simple container works:
+
+```dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+COPY . .
+RUN pip install .
+VOLUME /root/.domainwatch
+ENTRYPOINT ["domain-monitor"]
+CMD ["run", "-c", "/root/.domainwatch/config.yaml"]
+```
+
+### Cron-style (single checks)
+
+```cron
+*/15 * * * * /usr/local/bin/domain-monitor run -c ~/.domainwatch/config.yaml >> ~/domainwatch.log 2>&1
+```
+
+---
 
 ## Development
 
 ```bash
 pip install -e ".[dev]"
-pytest
+pytest -q
 ruff check .
+mypy domainwatch
 ```
+
+Release process:
+
+```bash
+git tag -a vX.Y.Z -m "vX.Y.Z"
+git push --tags
+```
+
+---
+
+## Roadmap
+
+- v0.4 — Email (SMTP) notifications, DKIM selector probing
+- v0.5 — Domain security score v2 (TLS headers, HTTP redirects)
+- v0.6 — Cloudflare / Namecheap / Porkbun providers
+- v0.7 — FastAPI web dashboard + REST API
+- v1.0 — Docker image, CI/CD, stable plugin API, binary releases
+
+---
+
+## Contributing
+
+Contributions are welcome!
+
+1. Fork → branch (`feat/…`, `fix/…`)
+2. Add tests for new behavior; keep `pytest` + `ruff` green
+3. One logical change per PR; describe *why*, not just *what*
+4. New providers/notifiers: implement the matching base class and document config keys
+5. Update `CHANGELOG.md` and this README
+
+Please read [`SECURITY.md`](SECURITY.md) before reporting vulnerabilities (coming soon).
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
