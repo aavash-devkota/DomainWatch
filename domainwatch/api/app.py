@@ -153,127 +153,113 @@ def metrics():
     return PlainTextResponse(render_prometheus(), media_type="text/plain; version=0.0.4")
 
 
-DASHBOARD_HTML = r"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>DomainWatch</title>
+DASHBOARD_HTML = r"""<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>DomainWatch</title>
 <style>
-*{box-sizing:border-box}body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:linear-gradient(160deg,#0b1020 0%,#0d1117 60%);color:#dbe2ea;margin:0;padding:2em;min-height:100vh}
-h1{margin-top:0;background:linear-gradient(90deg,#58a6ff,#a371f7);-webkit-background-clip:text;background-clip:text;color:transparent}
-.card{display:inline-block;background:rgba(22,27,34,.7);backdrop-filter:blur(6px);border:1px solid #30363d;border-radius:14px;padding:1.1em 1.8em;margin:.4em;text-align:center;min-width:130px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
-.num{font-size:2em;color:#58a6ff;font-weight:700}.tab{display:inline-block;padding:.55em 1.2em;border-radius:999px;border:1px solid #30363d;margin:.25em;cursor:pointer;transition:all .2s}
-.tab:hover{border-color:#58a6ff}.tab.active{background:linear-gradient(90deg,#1f6feb,#8957e5);border-color:transparent;color:#fff}section{background:rgba(22,27,34,.55);border:1px solid #30363d;border-radius:14px;padding:1.2em 1.4em;margin-top:1.2em;display:none}
-section.active{display:block}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #21262d;padding:.5em .8em;text-align:left}th{color:#8b949e;font-weight:600}
-.ok{color:#3fb950}.bad{color:#f85149}.warn{color:#d29922}input,button,select{background:#161b22;border:1px solid #30363d;color:#dbe2ea;border-radius:10px;padding:.45em .8em;margin:.2em}
-button{cursor:pointer;transition:all .2s}button:hover{background:#1f6feb;color:#fff;transform:translateY(-1px)}pre{white-space:pre-wrap;background:#0b0f14;border:1px solid #21262d;border-radius:10px;padding:1em;overflow-x:auto}
-mark{background:#8957e5;color:#fff;border-radius:3px}
+:root{--bg:#0b1020;--panel:#111827cc;--line:#26314a;--text:#dbe2ea;--muted:#8b949e;--accent:#58a6ff;--accent2:#a371f7;--green:#3fb950;--red:#f85149;--yellow:#d29922}
+*{box-sizing:border-box}body{font-family:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;background:radial-gradient(1200px 600px at 80% -10%,#1f2a4a22,transparent),linear-gradient(160deg,#0b1020,#0d1117);color:var(--text);margin:0;min-height:100vh;display:flex}
+aside{width:220px;background:var(--panel);border-right:1px solid var(--line);padding:1.4em 1em;position:sticky;top:0;height:100vh}
+aside h2{margin:0 0 1em;background:linear-gradient(90deg,var(--accent),var(--accent2));-webkit-background-clip:text;background-clip:text;color:transparent;font-size:1.2em}
+.nav{display:block;padding:.55em .9em;border-radius:10px;margin:.25em 0;cursor:pointer;color:var(--muted)}.nav:hover{background:#1f6feb22;color:var(--text)}.nav.active{background:linear-gradient(90deg,#1f6feb33,#8957e533);color:#fff;border:1px solid #1f6feb55}
+main{flex:1;padding:1.6em 2em;max-width:1200px}
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:1em}#clock{color:var(--muted);font-size:.9em}
+.card{display:inline-block;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:1em 1.6em;margin:.4em;text-align:center;min-width:130px;backdrop-filter:blur(6px);box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.card .num{font-size:2em;font-weight:700;color:var(--accent)}.card small{color:var(--muted)}
+section{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:1.2em 1.4em;margin-top:1.2em;display:none;backdrop-filter:blur(6px)}section.active{display:block}
+table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #21262d;padding:.5em .8em;text-align:left}th{color:var(--muted);font-weight:600}tr:hover td{background:#1f6feb11}
+.badge{padding:.15em .6em;border-radius:999px;font-size:.8em}.ok{color:var(--green)}.bad{color:var(--red)}.warn{color:var(--yellow)}
+.badge.ok{background:#3fb95022}.badge.bad{background:#f8514922}
+input,button,select{background:#161b22;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:.45em .8em;margin:.2em}
+button{cursor:pointer;transition:.2s}button:hover{background:#1f6feb;color:#fff;transform:translateY(-1px)}
+pre{white-space:pre-wrap;background:#0b0f14;border:1px solid #21262d;border-radius:10px;padding:1em;overflow-x:auto;max-height:420px}
+canvas{background:#0b0f14;border:1px solid #21262d;border-radius:10px}
+.toast{position:fixed;bottom:24px;right:24px;background:#161b22;border:1px solid var(--accent);color:var(--text);padding:.8em 1.2em;border-radius:10px;opacity:0;transition:.3s;z-index:99}
+label{margin-right:.8em;color:var(--muted)}
 </style></head><body>
-<h1>DomainWatch <small style="color:#8b949e;font-size:.6em">intelligence platform</small></h1>
-<div id="summary"></div>
-<div>
-<span class="tab active" onclick="show('domains',this)">Domains</span>
-<span class="tab" onclick="show('events',this)">Events</span>
-<span class="tab" onclick="show('tools',this)">Tools</span>
-<span class="tab" onclick="show('providers',this)">Providers</span>
-<span class="tab" onclick="show('alerts',this)">Alerts & Keys</span>
-<span class="tab" onclick="show('settings',this)">Settings</span>
-</div>
+<aside><h2>◈ DomainWatch</h2>
+<span class="nav active" onclick="show('dash',this)">📊 Dashboard</span>
+<span class="nav" onclick="show('domains',this)">🌐 Domains</span>
+<span class="nav" onclick="show('events',this)">🔔 Events</span>
+<span class="nav" onclick="show('tools',this)">🛠 Tools</span>
+<span class="nav" onclick="show('providers',this)">🔌 Providers</span>
+<span class="nav" onclick="show('alerts',this)">🔑 Alerts & Keys</span>
+<span class="nav" onclick="show('settings',this)">⚙️ Settings</span>
+</aside>
+<main>
+<div class="topbar"><div><h1 style="margin:0">DomainWatch</h1><small style="color:var(--muted)">domain intelligence & monitoring</small></div><div id="clock"></div></div>
 
-<section id="domains" class="active">
-<h2>Tracked domains</h2>
-<input id="nd" placeholder="example.com"><input id="nt" placeholder="target $" type="number">
-<button onclick="addDomain()">Add</button>
-<input placeholder="Filter table…" oninput="filterEl('dtable',this.value)" style="width:100%;margin:.5em 0">
-<table id="dtable"><tr><th>Domain</th><th>Status</th><th>Price</th><th>Expires</th><th>Lifecycle</th><th></th></tr></table>
-</section>
+<section id="dash" class="active"><h2>Overview</h2><div id="summary"></div>
+<h3>Price history — first tracked domain</h3><canvas id="chart" width="860" height="160"></canvas>
+<h3>Latest events</h3><table id="evmini"><tr><th>Time</th><th>Message</th></tr></table></section>
 
-<section id="events"><h2>Events</h2><button onclick="loadEvents()">Refresh</button>
-<input placeholder="Filter…" oninput="filterEl('etable',this.value)" style="width:100%;margin:.5em 0">
-<table id="etable"><tr><th>Time</th><th>Type</th><th>Message</th></tr></table></section>
+<section id="domains"><h2>Tracked domains</h2>
+<input id="nd" placeholder="example.com"><input id="nt" placeholder="target $" type="number"><button onclick="addDomain()">＋ Add</button>
+<input placeholder="Filter…" oninput="filterEl('dtable',this.value)" style="width:100%">
+<table id="dtable"><tr><th>Domain</th><th>Status</th><th>Price</th><th>Expires</th><th>Lifecycle</th><th></th></tr></table></section>
 
-<section id="tools">
-<h2>Tools</h2>
+<section id="events"><h2>Events</h2><button onclick="loadEvents()">⟳ Refresh</button>
+<input placeholder="Filter…" oninput="filterEl('etable',this.value)" style="width:100%">
+<table id="etable"><tr><th>Time</th><th>Severity</th><th>Message</th></tr></table></section>
+
+<section id="tools"><h2>Tools</h2>
 Domain: <input id="tdom" placeholder="example.com"><br>
-Select tools (multiple allowed):<br>
-<label><input type="checkbox" value="check" checked> Check</label>
-<label><input type="checkbox" value="score"> Score</label>
-<label><input type="checkbox" value="audit"> Audit</label>
-<label><input type="checkbox" value="price-compare"> Price-compare</label>
-<label><input type="checkbox" value="ct"> CT</label>
-<label><input type="checkbox" value="subdomains"> Subdomains</label>
-<label><input type="checkbox" value="tls"> TLS</label>
-<label><input type="checkbox" value="http"> HTTP</label>
-<label><input type="checkbox" value="lifecycle"> Lifecycle</label>
-<label><input type="checkbox" value="dns"> DNS</label><br>
-<button onclick="runSelected()">Run selected</button>
-<button onclick="selectAllTools(true)">Select all</button>
-<button onclick="selectAllTools(false)">Clear</button>
-<input placeholder="Filter result lines…" oninput="filterPre('toolout',this.value)" style="width:100%;margin:.5em 0">
-<pre id="toolout">Pick a domain, select tools, and run…</pre>
-</section>
+<label><input type="checkbox" value="check" checked> Check</label><label><input type="checkbox" value="score"> Score</label><label><input type="checkbox" value="audit"> Audit</label><label><input type="checkbox" value="price-compare"> Compare</label><label><input type="checkbox" value="ct"> CT</label><label><input type="checkbox" value="subdomains"> Subdomains</label><label><input type="checkbox" value="tls"> TLS</label><label><input type="checkbox" value="http"> HTTP</label><label><input type="checkbox" value="lifecycle"> Lifecycle</label><label><input type="checkbox" value="dns"> DNS</label><br>
+<button onclick="runSelected()">▶ Run selected</button><button onclick="selectAllTools(true)">Select all</button><button onclick="selectAllTools(false)">Clear</button>
+<input placeholder="Filter output…" oninput="filterPre('toolout',this.value)" style="width:100%">
+<pre id="toolout">Pick a domain, select tools, and run…</pre></section>
 
-<section id="providers"><h2>Provider health</h2><button onclick="loadProviders()">Probe</button><pre id="provout"></pre></section>
+<section id="providers"><h2>Provider health & metrics</h2><button onclick="loadProviders()">⟳ Probe</button><pre id="provout"></pre></section>
 
-<section id="alerts">
-<h2>API keys</h2>
+<section id="alerts"><h2>API keys</h2>
 <input id="kn" placeholder="name"><select id="kr"><option>viewer</option><option>operator</option><option>admin</option><option>auditor</option></select>
-<button onclick="createKey()">Create key</button>
-<button onclick="loadKeys()">Refresh</button>
+<button onclick="createKey()">＋ Create</button><button onclick="loadKeys()">⟳</button>
 <table id="ktable"><tr><th>Name</th><th>Role</th><th>Team</th><th>Revoked</th></tr></table>
-<h2>Audit log</h2><button onclick="loadAudit()">Refresh</button><table id="atable"><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th></tr></table>
-</section>
+<h2>Audit log</h2><button onclick="loadAudit()">⟳</button><table id="atable"><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th></tr></table></section>
 
-<section id="settings">
-<h2>Monitoring schedule & alerting</h2>
-Check interval (seconds): <input id="s_interval" type="number" value="300"><br>
-<h3>ntfy</h3>Topic URL: <input id="s_ntfy" placeholder="https://ntfy.sh/mytopic"> Enabled: <input id="s_ntfy_on" type="checkbox"><br>
-<h3>Discord</h3>Webhook: <input id="s_discord" placeholder="https://discord.com/api/webhooks/..."> Enabled: <input id="s_discord_on" type="checkbox"><br>
-<h3>Telegram</h3>Token: <input id="s_tg" placeholder="BOT_TOKEN"> Chat ID: <input id="s_tgc" placeholder="12345"> Enabled: <input id="s_tg_on" type="checkbox"><br>
-<button onclick="saveSettings()">Save settings</button>
-<button onclick="testAlert('console')">Test: console</button>
-<button onclick="testAlert('ntfy')">Test: ntfy</button>
-<button onclick="testAlert('discord')">Test: discord</button>
-<button onclick="testAlert('telegram')">Test: telegram</button>
-<pre id="setout"></pre>
-</section>
+<section id="settings"><h2>Monitoring & alerting</h2>
+Check interval (s): <input id="s_interval" type="number" value="300"><br>
+<h3>ntfy</h3>Topic: <input id="s_ntfy" placeholder="https://ntfy.sh/mytopic"> On: <input id="s_ntfy_on" type="checkbox"><br>
+<h3>Discord</h3>Webhook: <input id="s_discord"> On: <input id="s_discord_on" type="checkbox"><br>
+<h3>Telegram</h3>Token: <input id="s_tg"> Chat ID: <input id="s_tgc"> On: <input id="s_tg_on" type="checkbox"><br>
+<button onclick="saveSettings()">💾 Save</button>
+<button onclick="testAlert('console')">Test console</button><button onclick="testAlert('ntfy')">Test ntfy</button><button onclick="testAlert('discord')">Test discord</button><button onclick="testAlert('telegram')">Test telegram</button>
+<pre id="setout"></pre></section>
+</main>
+<div id="toast" class="toast"></div>
 
 <script>
-function show(id, el){document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');}
-async function api(u,opts){const r=await fetch(u,opts);return r.json();}
-function filterEl(id,q){document.querySelectorAll('#'+id+' tr').forEach((r,i)=>{if(i===0)return;r.style.display=r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
-function filterPre(id,q){const el=document.getElementById(id);if(!el.dataset.raw)el.dataset.raw=el.textContent;const lines=el.dataset.raw.split('\n').filter(l=>l.toLowerCase().includes(q.toLowerCase()));el.textContent=q?lines.join('\n'):el.dataset.raw;}
-async function loadSummary(){const d=await api('/domains');let expiring=0,avail=0;for(const x of d){const l=await api('/checks/'+x.domain+'?limit=1').catch(()=>null);}
-document.getElementById('summary').innerHTML=`<div class="card"><div class="num">${d.length}</div>Domains</div><div class="card"><a href="/events" style="color:#58a6ff">Events</a></div><div class="card"><a href="/metrics" style="color:#58a6ff">Metrics</a></div>`;}
+function show(id,el){document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.nav').forEach(n=>n.classList.remove('active'));el.classList.add('active');}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.opacity=1;setTimeout(()=>t.style.opacity=0,2500);}
+setInterval(()=>document.getElementById('clock').textContent=new Date().toLocaleString(),1000);
+async function api(u,o){const r=await fetch(u,o);return r.json();}
+function filterEl(id,q){document.querySelectorAll('#'+id+' tr').forEach((r,i)=>{if(!i)return;r.style.display=r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
+function filterPre(id,q){const el=document.getElementById(id);if(!el.dataset.raw)el.dataset.raw=el.textContent;if(!q){el.textContent=el.dataset.raw;return;}el.textContent=el.dataset.raw.split('\n').filter(l=>l.toLowerCase().includes(q.toLowerCase())).join('\n');}
+async function loadSummary(){const d=await api('/domains');let avail=0;for(const x of d){const h=await api('/checks/'+x.domain+'?limit=1').catch(()=>null);if(h&&h[0]&&h[0].available===1)avail++;}
+document.getElementById('summary').innerHTML=`<div class="card"><div class="num">${d.length}</div><small>Domains</small></div><div class="card"><div class="num">${avail}</div><small>Available</small></div><div class="card"><div class="num"><a href="/metrics" style="color:#58a6ff">📈</a></div><small>Metrics</small></div>`;
+if(d.length){const h=await api('/checks/'+d[0].domain+'?limit=200').catch(()=>[]);const pts=(h||[]).reverse().filter(x=>x.price).map(x=>x.price);drawChart(pts);}}
+function drawChart(pts){const c=document.getElementById('chart').getContext('2d');c.clearRect(0,0,860,160);if(!pts.length){c.fillStyle='#8b949e';c.fillText('no price history yet',20,80);return;}const mx=Math.max(...pts),mn=Math.min(...pts);c.strokeStyle='#3fb950';c.lineWidth=2;c.beginPath();pts.forEach((p,i)=>{const x=i/(pts.length-1||1)*840+10,y=150-((p-mn)/((mx-mn)||1))*130;i?c.lineTo(x,y):c.moveTo(x,y);});c.stroke();c.fillStyle='#8b949e';c.fillText('min $'+mn+'  max $'+mx,10,150);}
 async function loadDomains(){const d=await api('/domains');const t=document.getElementById('dtable');t.innerHTML='<tr><th>Domain</th><th>Status</th><th>Price</th><th>Expires</th><th>Lifecycle</th><th></th></tr>';
-for(const x of d){const last=await api('/checks/'+x.domain+'?limit=1').catch(()=>null);const h=last&&last[0]?last[0]:{};
-const av=h.available===1?'<span class="ok">AVAILABLE</span>':(h.available===0?'<span class="bad">taken</span>':'?');
-t.innerHTML+=`<tr><td>${x.domain}</td><td>${av}</td><td>${h.price?('$'+h.price):'-'}</td><td>${h.expiration||'-'}</td><td>${h.status||'-'}</td><td><button onclick="checkNow('${x.domain}')">check</button> <button onclick="del('${x.domain}')">✕</button></td></tr>`;}}
-async function addDomain(){const n=document.getElementById('nd').value;const t=document.getElementById('nt').value;if(!n)return;await api('/domains?domain='+encodeURIComponent(n)+(t?'&target_price='+t:''),{method:'POST'});loadDomains();}
-async function del(d){await api('/domains/'+d,{method:'DELETE'});loadDomains();}
-async function checkNow(d){await api('/checks/run/'+d);loadDomains();}
-async function loadEvents(){const e=await api('/events');const t=document.getElementById('etable');t.innerHTML='<tr><th>Time</th><th>Type</th><th>Message</th></tr>';e.forEach(x=>t.innerHTML+=`<tr><td>${x.timestamp}</td><td>${x.type}</td><td>${x.message}</td></tr>`);}
+for(const x of d){const last=await api('/checks/'+x.domain+'?limit=1').catch(()=>null);const h=last&&last[0]?last[0]:{};const av=h.available===1?'<span class="badge ok">AVAILABLE</span>':(h.available===0?'<span class="badge bad">taken</span>':'?');
+t.innerHTML+=`<tr><td>${x.domain}</td><td>${av}</td><td>${h.price?('$'+h.price):'-'}</td><td>${h.expiration||'-'}</td><td><span class="badge ${h.status==='available'?'ok':'warn'}">${h.status||'-'}</span></td><td><button onclick="checkNow('${x.domain}')">check</button><button onclick="del('${x.domain}')">✕</button></td></tr>`;}}
+async function addDomain(){const n=document.getElementById('nd').value,t=document.getElementById('nt').value;if(!n)return;await api('/domains?domain='+encodeURIComponent(n)+(t?'&target_price='+t:''),{method:'POST'});toast('added '+n);loadDomains();loadSummary();}
+async function del(d){await api('/domains/'+d,{method:'DELETE'});toast('removed '+d);loadDomains();loadSummary();}
+async function checkNow(d){await api('/checks/run/'+d);toast('checked '+d);loadDomains();}
+async function loadEvents(){const e=await api('/events');const t=document.getElementById('etable');t.innerHTML='<tr><th>Time</th><th>Severity</th><th>Message</th></tr>';e.forEach(x=>t.innerHTML+=`<tr><td>${x.timestamp}</td><td>${(x.data&&x.data.severity)||''}</td><td>${x.message}</td></tr>`);
+const m=document.getElementById('evmini');m.innerHTML='<tr><th>Time</th><th>Message</th></tr>';e.slice(0,5).forEach(x=>m.innerHTML+=`<tr><td>${x.timestamp}</td><td>${x.message}</td></tr>`);}
 function selectAllTools(v){document.querySelectorAll('#tools input[type=checkbox]').forEach(c=>c.checked=v);}
-async function runSelected(){const d=document.getElementById('tdom').value;if(!d)return alert('enter a domain');
-const chosen=[...document.querySelectorAll('#tools input[type=checkbox]:checked')].map(c=>c.value);
-if(!chosen.length)return alert('select at least one tool');
-const map={check:'/checks/run/',score:'/score/',audit:'/audit/','price-compare':'/price-compare/',ct:'/certificates/',subdomains:'/subdomains/',tls:'/tls/',http:'/http/',lifecycle:'/lifecycle/',dns:'/dns/'};
-const el=document.getElementById('toolout');el.textContent='';delete el.dataset.raw;
-for(const what of chosen){el.textContent+='\n===== '+what.toUpperCase()+' =====\n';
-try{const r=await api(map[what]+d);el.textContent+=JSON.stringify(r,null,2)+'\n';}catch(e){el.textContent+='error: '+e+'\n';}
-delete el.dataset.raw;}}
+async function runSelected(){const d=document.getElementById('tdom').value;if(!d)return alert('enter a domain');const chosen=[...document.querySelectorAll('#tools input[type=checkbox]:checked')].map(c=>c.value);if(!chosen.length)return alert('select tools');
+const map={check:'/checks/run/',score:'/score/',audit:'/audit/','price-compare':'/price-compare/',ct:'/certificates/',subdomains:'/subdomains/',tls:'/tls/',http:'/http/',lifecycle:'/lifecycle/',dns:'/dns/'};const el=document.getElementById('toolout');el.textContent='';delete el.dataset.raw;
+for(const w of chosen){el.textContent+='\n===== '+w.toUpperCase()+' =====\n';try{el.textContent+=JSON.stringify(await api(map[w]+d),null,2)+'\n';}catch(e){el.textContent+='error: '+e+'\n';}delete el.dataset.raw;}}
 async function loadProviders(){const r=await fetch('/metrics');document.getElementById('provout').textContent=await r.text();}
-async function createKey(){const n=document.getElementById('kn').value;const r=document.getElementById('kr').value;const res=await api(`/keys?name=${n}&role=${r}`,{method:'POST'});alert('New key: '+res.key);loadKeys();}
+async function createKey(){const n=document.getElementById('kn').value,r=document.getElementById('kr').value;const res=await api(`/keys?name=${n}&role=${r}`,{method:'POST'});toast('key created');alert('New key: '+res.key);loadKeys();}
 async function loadKeys(){const k=await api('/keys');const t=document.getElementById('ktable');t.innerHTML='<tr><th>Name</th><th>Role</th><th>Team</th><th>Revoked</th></tr>';k.forEach(x=>t.innerHTML+=`<tr><td>${x.name}</td><td>${x.role}</td><td>${x.team}</td><td>${x.revoked}</td></tr>`);}
 async function loadAudit(){const a=await api('/audit?limit=50');const t=document.getElementById('atable');t.innerHTML='<tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th></tr>';a.forEach(x=>t.innerHTML+=`<tr><td>${x.timestamp}</td><td>${x.actor}</td><td>${x.action}</td><td>${x.target}</td></tr>`);}
+async function loadSettings(){try{const c=await api('/settings');document.getElementById('s_interval').value=(c.monitor&&c.monitor.interval)||300;const n=c.notifications||{};const nz=n.ntfy||{};document.getElementById('s_ntfy').value=nz.topic||'';document.getElementById('s_ntfy_on').checked=!!nz.enabled;const d=n.discord||{};document.getElementById('s_discord').value=d.webhook||'';document.getElementById('s_discord_on').checked=!!d.enabled;const t=n.telegram||{};document.getElementById('s_tg').value=t.token||'';document.getElementById('s_tgc').value=t.chat_id||'';document.getElementById('s_tg_on').checked=!!t.enabled;}catch(e){}}
+async function saveSettings(){const p=new URLSearchParams();p.set('interval',document.getElementById('s_interval').value);p.set('ntfy_topic',document.getElementById('s_ntfy').value);p.set('ntfy_enabled',document.getElementById('s_ntfy_on').checked);p.set('discord_webhook',document.getElementById('s_discord').value);p.set('discord_enabled',document.getElementById('s_discord_on').checked);p.set('telegram_token',document.getElementById('s_tg').value);p.set('telegram_chat_id',document.getElementById('s_tgc').value);p.set('telegram_enabled',document.getElementById('s_tg_on').checked);await api('/settings?'+p.toString(),{method:'POST'});toast('settings saved');document.getElementById('setout').textContent='saved';}
+async function testAlert(ch){try{const r=await api('/test-alert?channel='+ch,{method:'POST'});document.getElementById('setout').textContent=JSON.stringify(r,null,2);toast('test '+ch);}catch(e){document.getElementById('setout').textContent='error: '+e;}}
 loadSummary();loadDomains();loadEvents();loadSettings();
-async function loadSettings(){try{const c=await api('/settings');document.getElementById('s_interval').value=(c.monitor&&c.monitor.interval)||300;
-const n=c.notifications||{};const nz=n.ntfy||{};document.getElementById('s_ntfy').value=nz.topic||'';document.getElementById('s_ntfy_on').checked=!!nz.enabled;
-const d=n.discord||{};document.getElementById('s_discord').value=d.webhook||'';document.getElementById('s_discord_on').checked=!!d.enabled;
-const t=n.telegram||{};document.getElementById('s_tg').value=t.token||'';document.getElementById('s_tgc').value=t.chat_id||'';document.getElementById('s_tg_on').checked=!!t.enabled;}catch(e){}}
-async function saveSettings(){const p=new URLSearchParams();p.set('interval',document.getElementById('s_interval').value);
-p.set('ntfy_topic',document.getElementById('s_ntfy').value);p.set('ntfy_enabled',document.getElementById('s_ntfy_on').checked);
-p.set('discord_webhook',document.getElementById('s_discord').value);p.set('discord_enabled',document.getElementById('s_discord_on').checked);
-p.set('telegram_token',document.getElementById('s_tg').value);p.set('telegram_chat_id',document.getElementById('s_tgc').value);p.set('telegram_enabled',document.getElementById('s_tg_on').checked);
-document.getElementById('setout').textContent=JSON.stringify(await api('/settings?'+p.toString(),{method:'POST'}),null,2);}
-async function testAlert(ch){document.getElementById('setout').textContent=JSON.stringify(await api('/test-alert?channel='+ch,{method:'POST'}),null,2);}
 </script></body></html>"""
+
+
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
