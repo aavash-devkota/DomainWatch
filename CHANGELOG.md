@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.1.0 (2026-10-04)
+- Interactive dashboard SPA: tabbed UI (Domains / Events / Tools / Providers / Alerts & Keys), add/remove domains, per-domain check button, probe any tool (check/score/audit/price-compare/CT/subdomains/TLS/HTTP/lifecycle/DNS), provider health probe, API key creation, audit log view
+- New API endpoints: `/checks/run/{domain}`, `/price-compare/{domain}`, `/subdomains/{domain}`, `/tls/{domain}`, `/http/{domain}`, `/lifecycle/{domain}`
+
 ## v1.0.1 (2026-10-04)
 - Check results enriched from RDAP (registrar/expiration/nameservers/status) when provider omits them — `check` now prints taken-domain registrar+expiry
 - `lifecycle` command uses RDAP availability/status for live lookups
