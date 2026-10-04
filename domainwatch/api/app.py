@@ -155,13 +155,15 @@ def metrics():
 
 DASHBOARD_HTML = r"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>DomainWatch</title>
 <style>
-*{box-sizing:border-box}body{font-family:ui-monospace,monospace;background:#0d1117;color:#c9d1d9;margin:0;padding:1.5em}
-h1{margin-top:0}.card{display:inline-block;border:1px solid #30363d;border-radius:8px;padding:1em 1.6em;margin:.4em;text-align:center;min-width:130px}
-.num{font-size:1.8em;color:#58a6ff}.tab{display:inline-block;padding:.5em 1em;border:1px solid #30363d;border-radius:6px;margin:.2em;cursor:pointer}
-.tab.active{background:#1f6feb;border-color:#1f6feb;color:#fff}section{border:1px solid #30363d;border-radius:8px;padding:1em;margin-top:1em;display:none}
-section.active{display:block}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #21262d;padding:.45em .7em;text-align:left}
-.ok{color:#3fb950}.bad{color:#f85149}.warn{color:#d29922}input,button,select{background:#161b22;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;padding:.4em .7em;margin:.2em}
-button{cursor:pointer}button:hover{background:#1f6feb;color:#fff}pre{white-space:pre-wrap;background:#161b22;border-radius:6px;padding:.8em;overflow-x:auto}
+*{box-sizing:border-box}body{font-family:'Inter',system-ui,-apple-system,sans-serif;background:linear-gradient(160deg,#0b1020 0%,#0d1117 60%);color:#dbe2ea;margin:0;padding:2em;min-height:100vh}
+h1{margin-top:0;background:linear-gradient(90deg,#58a6ff,#a371f7);-webkit-background-clip:text;background-clip:text;color:transparent}
+.card{display:inline-block;background:rgba(22,27,34,.7);backdrop-filter:blur(6px);border:1px solid #30363d;border-radius:14px;padding:1.1em 1.8em;margin:.4em;text-align:center;min-width:130px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
+.num{font-size:2em;color:#58a6ff;font-weight:700}.tab{display:inline-block;padding:.55em 1.2em;border-radius:999px;border:1px solid #30363d;margin:.25em;cursor:pointer;transition:all .2s}
+.tab:hover{border-color:#58a6ff}.tab.active{background:linear-gradient(90deg,#1f6feb,#8957e5);border-color:transparent;color:#fff}section{background:rgba(22,27,34,.55);border:1px solid #30363d;border-radius:14px;padding:1.2em 1.4em;margin-top:1.2em;display:none}
+section.active{display:block}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #21262d;padding:.5em .8em;text-align:left}th{color:#8b949e;font-weight:600}
+.ok{color:#3fb950}.bad{color:#f85149}.warn{color:#d29922}input,button,select{background:#161b22;border:1px solid #30363d;color:#dbe2ea;border-radius:10px;padding:.45em .8em;margin:.2em}
+button{cursor:pointer;transition:all .2s}button:hover{background:#1f6feb;color:#fff;transform:translateY(-1px)}pre{white-space:pre-wrap;background:#0b0f14;border:1px solid #21262d;border-radius:10px;padding:1em;overflow-x:auto}
+mark{background:#8957e5;color:#fff;border-radius:3px}
 </style></head><body>
 <h1>DomainWatch <small style="color:#8b949e;font-size:.6em">intelligence platform</small></h1>
 <div id="summary"></div>
@@ -178,10 +180,13 @@ button{cursor:pointer}button:hover{background:#1f6feb;color:#fff}pre{white-space
 <h2>Tracked domains</h2>
 <input id="nd" placeholder="example.com"><input id="nt" placeholder="target $" type="number">
 <button onclick="addDomain()">Add</button>
+<input placeholder="Filter table…" oninput="filterEl('dtable',this.value)" style="width:100%;margin:.5em 0">
 <table id="dtable"><tr><th>Domain</th><th>Status</th><th>Price</th><th>Expires</th><th>Lifecycle</th><th></th></tr></table>
 </section>
 
-<section id="events"><h2>Events</h2><button onclick="loadEvents()">Refresh</button><table id="etable"><tr><th>Time</th><th>Type</th><th>Message</th></tr></table></section>
+<section id="events"><h2>Events</h2><button onclick="loadEvents()">Refresh</button>
+<input placeholder="Filter…" oninput="filterEl('etable',this.value)" style="width:100%;margin:.5em 0">
+<table id="etable"><tr><th>Time</th><th>Type</th><th>Message</th></tr></table></section>
 
 <section id="tools">
 <h2>Tools</h2>
@@ -196,6 +201,7 @@ Domain: <input id="tdom" placeholder="example.com">
 <button onclick="probe('http')">HTTP</button>
 <button onclick="probe('lifecycle')">Lifecycle</button>
 <button onclick="probe('dns')">DNS</button>
+<input placeholder="Filter result lines…" oninput="filterPre('toolout',this.value)" style="width:100%;margin:.5em 0">
 <pre id="toolout">Pick a domain and a tool…</pre>
 </section>
 
@@ -227,6 +233,8 @@ Check interval (seconds): <input id="s_interval" type="number" value="300"><br>
 <script>
 function show(id, el){document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');}
 async function api(u,opts){const r=await fetch(u,opts);return r.json();}
+function filterEl(id,q){document.querySelectorAll('#'+id+' tr').forEach((r,i)=>{if(i===0)return;r.style.display=r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
+function filterPre(id,q){const el=document.getElementById(id);if(!el.dataset.raw)el.dataset.raw=el.textContent;const lines=el.dataset.raw.split('\n').filter(l=>l.toLowerCase().includes(q.toLowerCase()));el.textContent=q?lines.join('\n'):el.dataset.raw;}
 async function loadSummary(){const d=await api('/domains');let expiring=0,avail=0;for(const x of d){const l=await api('/checks/'+x.domain+'?limit=1').catch(()=>null);}
 document.getElementById('summary').innerHTML=`<div class="card"><div class="num">${d.length}</div>Domains</div><div class="card"><a href="/events" style="color:#58a6ff">Events</a></div><div class="card"><a href="/metrics" style="color:#58a6ff">Metrics</a></div>`;}
 async function loadDomains(){const d=await api('/domains');const t=document.getElementById('dtable');t.innerHTML='<tr><th>Domain</th><th>Status</th><th>Price</th><th>Expires</th><th>Lifecycle</th><th></th></tr>';
@@ -240,7 +248,7 @@ async function loadEvents(){const e=await api('/events');const t=document.getEle
 async function probe(what){const d=document.getElementById('tdom').value;if(!d)return alert('enter a domain');
 document.getElementById('toolout').textContent='loading…';
 const map={check:'/checks/run/',score:'/score/',audit:'/audit/','price-compare':'/price-compare/',ct:'/certificates/',subdomains:'/subdomains/',tls:'/tls/',http:'/http/',lifecycle:'/lifecycle/',dns:'/dns/'};
-try{const r=await api(map[what]+d);document.getElementById('toolout').textContent=JSON.stringify(r,null,2);}catch(e){document.getElementById('toolout').textContent='error: '+e;}}
+try{const r=await api(map[what]+d);const el=document.getElementById('toolout');el.textContent=JSON.stringify(r,null,2);delete el.dataset.raw;}catch(e){document.getElementById('toolout').textContent='error: '+e;}}
 async function loadProviders(){const r=await fetch('/metrics');document.getElementById('provout').textContent=await r.text();}
 async function createKey(){const n=document.getElementById('kn').value;const r=document.getElementById('kr').value;const res=await api(`/keys?name=${n}&role=${r}`,{method:'POST'});alert('New key: '+res.key);loadKeys();}
 async function loadKeys(){const k=await api('/keys');const t=document.getElementById('ktable');t.innerHTML='<tr><th>Name</th><th>Role</th><th>Team</th><th>Revoked</th></tr>';k.forEach(x=>t.innerHTML+=`<tr><td>${x.name}</td><td>${x.role}</td><td>${x.team}</td><td>${x.revoked}</td></tr>`);}

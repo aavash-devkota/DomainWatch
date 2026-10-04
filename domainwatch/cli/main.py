@@ -34,19 +34,23 @@ def cmd_check(args) -> int:
             line = line.strip()
             if line and not line.startswith("#"):
                 targets.append(line)
-    for d in targets:
-        d = d.strip()
-        if not d:
-            continue
-        st = eng.check_one(d, args.target)
+    from concurrent.futures import ThreadPoolExecutor
+
+    def one(d):
+        return eng.check_one(d, args.target)
+
+    with ThreadPoolExecutor(max_workers=args.workers) as ex:
+        states = list(ex.map(one, [d.strip() for d in targets if d.strip()]))
+    for st in states:
         if st.error:
-            print(f"[x] {d}: {st.error}")
+            if not args.only_available:
+                print(f"[x] {st.domain}: {st.error}")
         elif st.available:
             p = f"${st.price:,.2f}" if st.price is not None else "price n/a"
             prem = " [PREMIUM]" if st.premium else ""
-            print(f"[+] {d}: AVAILABLE — {p} {st.currency}/yr{prem} (via {st.provider})")
-        else:
-            print(f"[x] {d}: TAKEN (registrar: {st.registrar or 'n/a'}, expires: {st.expiration or 'n/a'})")
+            print(f"[+] {st.domain}: AVAILABLE — {p} {st.currency}/yr{prem} (via {st.provider})")
+        elif not args.only_available:
+            print(f"[x] {st.domain}: TAKEN (registrar: {st.registrar or 'n/a'}, expires: {st.expiration or 'n/a'})")
     return 0
 
 
@@ -172,15 +176,18 @@ def cmd_discover(args) -> int:
     candidates |= {f"{base}{s}.com" for s in suffixes}
     eng = _engine(args)
     from ..core.score import score_domain
-    ranked = []
-    for c in sorted(candidates):
+    from concurrent.futures import ThreadPoolExecutor
+
+    def probe(c):
         st = eng.check_one(c, args.target)
-        mark = "AVAILABLE" if st.available else (st.error or "taken")
-        price = f" ${st.price:,.2f}" if st.price else ""
         s = score_domain(c, st.available, st.price, st.premium)
-        ranked.append((s.total, c, mark, price))
-        time.sleep(0.5)
+        return s.total, c, ("AVAILABLE" if st.available else (st.error or "taken")), (f" ${st.price:,.2f}" if st.price else "")
+
+    with ThreadPoolExecutor(max_workers=args.workers) as ex:
+        ranked = list(ex.map(probe, sorted(candidates)))
     for total, c, mark, price in sorted(ranked, reverse=True):
+        if args.only_available and mark != "AVAILABLE":
+            continue
         print(f"{c:<35} {mark}{price}   score {total}")
     return 0
 
@@ -499,7 +506,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("-c", "--config", help="path to config.yaml", default=None)
     sub = p.add_subparsers(dest="command", required=True)
 
-    s = sub.add_parser("check"); s.add_argument("domains", nargs="*"); s.add_argument("-f", "--file"); s.add_argument("-t", "--target", type=float); s.set_defaults(func=cmd_check)
+    s = sub.add_parser("check"); s.add_argument("domains", nargs="*"); s.add_argument("-f", "--file"); s.add_argument("-t", "--target", type=float); s.add_argument("--only-available", action="store_true"); s.add_argument("--workers", type=int, default=6); s.set_defaults(func=cmd_check)
     s = sub.add_parser("add"); s.add_argument("domains", nargs="+"); s.add_argument("-t", "--target", type=float); s.set_defaults(func=cmd_add)
     s = sub.add_parser("remove"); s.add_argument("domains", nargs="+"); s.set_defaults(func=cmd_remove)
     sub.add_parser("list").set_defaults(func=cmd_list)
@@ -528,7 +535,7 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("rdap"); s.add_argument("domain"); s.set_defaults(func=cmd_rdap)
     s = sub.add_parser("dns"); s.add_argument("domain"); s.set_defaults(func=cmd_dns)
     s = sub.add_parser("audit"); s.add_argument("domain"); s.set_defaults(func=cmd_audit)
-    s = sub.add_parser("discover"); s.add_argument("name"); s.add_argument("--tlds", nargs="*"); s.add_argument("--prefixes", nargs="*"); s.add_argument("--suffixes", nargs="*"); s.add_argument("-t", "--target", type=float); s.set_defaults(func=cmd_discover)
+    s = sub.add_parser("discover"); s.add_argument("name"); s.add_argument("--tlds", nargs="*"); s.add_argument("--prefixes", nargs="*"); s.add_argument("--suffixes", nargs="*"); s.add_argument("-t", "--target", type=float); s.add_argument("--only-available", action="store_true"); s.add_argument("--workers", type=int, default=6); s.set_defaults(func=cmd_discover)
     s = sub.add_parser("run"); s.add_argument("-i", "--interval", type=float); s.set_defaults(func=cmd_run)
     s = sub.add_parser("monitor"); s.add_argument("domains", nargs="*"); s.add_argument("-i", "--interval", type=float, default=300); s.set_defaults(func=cmd_monitor)
     return p
