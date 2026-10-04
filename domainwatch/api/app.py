@@ -89,6 +89,63 @@ def lifecycle_ep(domain: str):
             "expiration": last["expiration"]}
 
 
+@app.get("/settings")
+def get_settings():
+    from ..config import load_config
+    return load_config() or {}
+
+
+@app.post("/settings")
+def save_settings(interval: Optional[float] = None, ntfy_topic: Optional[str] = None,
+                  discord_webhook: Optional[str] = None, telegram_token: Optional[str] = None,
+                  telegram_chat_id: Optional[str] = None, ntfy_enabled: Optional[bool] = None,
+                  discord_enabled: Optional[bool] = None, telegram_enabled: Optional[bool] = None):
+    import yaml
+    from ..config import DEFAULT_CONFIG, load_config
+    cfg = load_config() or {}
+    if interval is not None:
+        cfg.setdefault("monitor", {})["interval"] = interval
+    n = cfg.setdefault("notifications", {})
+    def setn(key, enabled, **kv):
+        sec = n.setdefault(key, {})
+        if enabled is not None:
+            sec["enabled"] = enabled
+        for k, v in kv.items():
+            if v is not None:
+                sec[k] = v
+    setn("ntfy", ntfy_enabled, topic=ntfy_topic)
+    setn("discord", discord_enabled, webhook=discord_webhook)
+    setn("telegram", telegram_enabled, token=telegram_token, chat_id=telegram_chat_id)
+    DEFAULT_CONFIG.parent.mkdir(parents=True, exist_ok=True)
+    with DEFAULT_CONFIG.open("w") as f:
+        yaml.safe_dump(cfg, f)
+    from ..storage.team import audit
+    audit(db.conn, "gui", "save_settings", "config")
+    return {"saved": True, "config": cfg}
+
+
+@app.post("/test-alert")
+def test_alert(channel: str = "console"):
+    from ..core.models import Event
+    from ..notifications.base import ConsoleNotifier, DiscordNotifier, NtfyNotifier, TelegramNotifier
+    from ..config import load_config, get
+    cfg = load_config()
+    ev = Event("TestAlert", "example.com", f"DomainWatch test alert via {channel}")
+    try:
+        if channel == "discord":
+            DiscordNotifier(get(cfg, "notifications", "discord", "webhook", default="")).send(ev)
+        elif channel == "ntfy":
+            NtfyNotifier(get(cfg, "notifications", "ntfy", "topic", default="")).send(ev)
+        elif channel == "telegram":
+            TelegramNotifier(get(cfg, "notifications", "telegram", "token", default=""),
+                             str(get(cfg, "notifications", "telegram", "chat_id", default=""))).send(ev)
+        else:
+            ConsoleNotifier().send(ev)
+        return {"sent": channel}
+    except Exception as e:
+        raise HTTPException(400, str(e))
+
+
 @app.get("/metrics")
 def metrics():
     from fastapi.responses import PlainTextResponse
@@ -114,6 +171,7 @@ button{cursor:pointer}button:hover{background:#1f6feb;color:#fff}pre{white-space
 <span class="tab" onclick="show('tools',this)">Tools</span>
 <span class="tab" onclick="show('providers',this)">Providers</span>
 <span class="tab" onclick="show('alerts',this)">Alerts & Keys</span>
+<span class="tab" onclick="show('settings',this)">Settings</span>
 </div>
 
 <section id="domains" class="active">
@@ -152,6 +210,20 @@ Domain: <input id="tdom" placeholder="example.com">
 <h2>Audit log</h2><button onclick="loadAudit()">Refresh</button><table id="atable"><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th></tr></table>
 </section>
 
+<section id="settings">
+<h2>Monitoring schedule & alerting</h2>
+Check interval (seconds): <input id="s_interval" type="number" value="300"><br>
+<h3>ntfy</h3>Topic URL: <input id="s_ntfy" placeholder="https://ntfy.sh/mytopic"> Enabled: <input id="s_ntfy_on" type="checkbox"><br>
+<h3>Discord</h3>Webhook: <input id="s_discord" placeholder="https://discord.com/api/webhooks/..."> Enabled: <input id="s_discord_on" type="checkbox"><br>
+<h3>Telegram</h3>Token: <input id="s_tg" placeholder="BOT_TOKEN"> Chat ID: <input id="s_tgc" placeholder="12345"> Enabled: <input id="s_tg_on" type="checkbox"><br>
+<button onclick="saveSettings()">Save settings</button>
+<button onclick="testAlert('console')">Test: console</button>
+<button onclick="testAlert('ntfy')">Test: ntfy</button>
+<button onclick="testAlert('discord')">Test: discord</button>
+<button onclick="testAlert('telegram')">Test: telegram</button>
+<pre id="setout"></pre>
+</section>
+
 <script>
 function show(id, el){document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');}
 async function api(u,opts){const r=await fetch(u,opts);return r.json();}
@@ -173,7 +245,17 @@ async function loadProviders(){const r=await fetch('/metrics');document.getEleme
 async function createKey(){const n=document.getElementById('kn').value;const r=document.getElementById('kr').value;const res=await api(`/keys?name=${n}&role=${r}`,{method:'POST'});alert('New key: '+res.key);loadKeys();}
 async function loadKeys(){const k=await api('/keys');const t=document.getElementById('ktable');t.innerHTML='<tr><th>Name</th><th>Role</th><th>Team</th><th>Revoked</th></tr>';k.forEach(x=>t.innerHTML+=`<tr><td>${x.name}</td><td>${x.role}</td><td>${x.team}</td><td>${x.revoked}</td></tr>`);}
 async function loadAudit(){const a=await api('/audit?limit=50');const t=document.getElementById('atable');t.innerHTML='<tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th></tr>';a.forEach(x=>t.innerHTML+=`<tr><td>${x.timestamp}</td><td>${x.actor}</td><td>${x.action}</td><td>${x.target}</td></tr>`);}
-loadSummary();loadDomains();loadEvents();
+loadSummary();loadDomains();loadEvents();loadSettings();
+async function loadSettings(){try{const c=await api('/settings');document.getElementById('s_interval').value=(c.monitor&&c.monitor.interval)||300;
+const n=c.notifications||{};const nz=n.ntfy||{};document.getElementById('s_ntfy').value=nz.topic||'';document.getElementById('s_ntfy_on').checked=!!nz.enabled;
+const d=n.discord||{};document.getElementById('s_discord').value=d.webhook||'';document.getElementById('s_discord_on').checked=!!d.enabled;
+const t=n.telegram||{};document.getElementById('s_tg').value=t.token||'';document.getElementById('s_tgc').value=t.chat_id||'';document.getElementById('s_tg_on').checked=!!t.enabled;}catch(e){}}
+async function saveSettings(){const p=new URLSearchParams();p.set('interval',document.getElementById('s_interval').value);
+p.set('ntfy_topic',document.getElementById('s_ntfy').value);p.set('ntfy_enabled',document.getElementById('s_ntfy_on').checked);
+p.set('discord_webhook',document.getElementById('s_discord').value);p.set('discord_enabled',document.getElementById('s_discord_on').checked);
+p.set('telegram_token',document.getElementById('s_tg').value);p.set('telegram_chat_id',document.getElementById('s_tgc').value);p.set('telegram_enabled',document.getElementById('s_tg_on').checked);
+document.getElementById('setout').textContent=JSON.stringify(await api('/settings?'+p.toString(),{method:'POST'}),null,2);}
+async function testAlert(ch){document.getElementById('setout').textContent=JSON.stringify(await api('/test-alert?channel='+ch,{method:'POST'}),null,2);}
 </script></body></html>"""
 
 
