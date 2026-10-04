@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, WebSocket
 from fastapi.responses import HTMLResponse
 
 from .. import __version__
@@ -146,6 +146,63 @@ def test_alert(channel: str = "console"):
         raise HTTPException(400, str(e))
 
 
+TERMINAL_HTML = r"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>DomainWatch Terminal</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css">
+<style>html,body{margin:0;height:100%;background:#0b0f14}#t{height:100vh}</style></head>
+<body><div id="t"></div>
+<script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+<script>
+const term = new Terminal({cursorBlink:true,fontFamily:'monospace',fontSize:13,theme:{background:'#0b0f14'}});
+const fit = new FitAddon.FitAddon();term.loadAddon(fit);term.open(document.getElementById('t'));fit.fit();
+const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+const ws = new WebSocket(`${proto}://${location.host}/ws/terminal`);
+ws.onopen = () => { term.onData(d => ws.send(d)); term.onResize(()=>{}); term.focus(); };
+ws.onmessage = e => term.write(e.data);
+ws.onclose = () => term.write('\r\n[session closed]\r\n');
+window.onresize = () => fit.fit();
+</script></body></html>"""
+
+
+@app.get("/terminal-ui", response_class=HTMLResponse)
+def terminal_ui():
+    return HTMLResponse(TERMINAL_HTML)
+
+
+@app.websocket("/ws/terminal")
+async def ws_terminal(ws: WebSocket):
+    import asyncio, os, pexpect
+    await ws.accept()
+    child = pexpect.spawn("/bin/bash", ["-i"], encoding="utf-8", codec_errors="replace",
+                          env={**os.environ, "TERM": "xterm-256color", "PS1": "\\u@dw:\\w\\$ "},
+                          cwd=os.path.expanduser("~"), timeout=None)
+    stop = False
+
+    async def reader():
+        nonlocal stop
+        while not stop:
+            try:
+                data = await asyncio.to_thread(child.read_nonblocking, 4096, 0.1)
+                await ws.send_text(data)
+            except pexpect.TIMEOUT:
+                continue
+            except (pexpect.EOF, Exception):
+                stop = True
+                break
+
+    async def writer():
+        nonlocal stop
+        try:
+            while not stop:
+                msg = await ws.receive_text()
+                child.send(msg)
+        except Exception:
+            stop = True
+
+    await asyncio.gather(reader(), writer())
+    child.close(force=True)
+
+
 @app.post("/terminal")
 def terminal(cmd: str = Query(...)):
     import re, subprocess, shlex
@@ -235,10 +292,8 @@ Domain: <input id="tdom" placeholder="example.com"><br>
 <table id="ktable"><tr><th>Name</th><th>Role</th><th>Team</th><th>Revoked</th></tr></table>
 <h2>Audit log</h2><button onclick="loadAudit()">⟳</button><table id="atable"><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th></tr></table></section>
 
-<section id="terminal"><h2>🖥️ Terminal</h2>
-<div id="termout" style="background:#0b0f14;border:1px solid #21262d;border-radius:10px;padding:1em;height:360px;overflow-y:auto;white-space:pre-wrap">DomainWatch web terminal. Type commands below. Allowed: domain-monitor subcommands only.\n</div>
-<input id="terminput" placeholder="domain-monitor status" style="width:80%" onkeydown="if(event.key==='Enter')runTerm()"><button onclick="runTerm()">▶ Run</button>
-<button onclick="document.getElementById('termout').textContent=''">Clear</button>
+<section id="terminal"><h2>🖥️ Interactive Terminal</h2>
+<iframe src="/terminal-ui" style="width:100%;height:480px;border:1px solid #21262d;border-radius:10px"></iframe>
 </section>
 
 <section id="settings"><h2>Monitoring & alerting</h2>
