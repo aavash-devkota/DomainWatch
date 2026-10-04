@@ -1,0 +1,20 @@
+monitor:
+  interval: 300
+
+domains:
+  - domain: facebook.com
+    target_price: 20
+  - domain: cveguard.com
+    target_price: 20
+
+notifications:
+  ntfy:
+    enabled: false
+    topic: https://ntfy.sh/CHANGE_ME
+  discord:
+    enabled: false
+    webhook: ${DISCORD_WEBHOOK}
+
+reports:
+  weekly:
+    enabled: false

@@ -1,0 +1,16 @@
+[Unit]
+Description=DomainWatch monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=kali
+WorkingDirectory=/home/kali/Documents/domainwatch
+EnvironmentFile=/home/kali/.domainwatch/.env
+ExecStart=/home/kali/.local/bin/domain-monitor run -c /home/kali/.domainwatch/config.yaml
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
