@@ -35,6 +35,60 @@ def require_role(min_role: str):
     return dep
 
 
+@app.get("/checks/run/{domain}")
+def run_check(domain: str):
+    from ..core.engine import Engine
+    eng = Engine(db=db)
+    st = eng.check_one(domain)
+    return st.to_dict()
+
+
+@app.get("/price-compare/{domain}")
+def price_compare(domain: str):
+    from ..providers import registry
+    offers = registry.compare(domain)
+    return [o.__dict__ for o in offers]
+
+
+@app.get("/subdomains/{domain}")
+def subdomains_ep(domain: str, resolve: bool = False):
+    from .. import ct
+    subs = ct.subdomains(domain)
+    if not resolve:
+        return {"domain": domain, "count": len(subs), "subdomains": subs}
+    import socket
+    out = []
+    for s in subs[:100]:
+        try:
+            out.append({"subdomain": s, "ip": socket.gethostbyname(s)})
+        except Exception:
+            out.append({"subdomain": s, "ip": None})
+    return {"domain": domain, "count": len(out), "subdomains": out}
+
+
+@app.get("/tls/{domain}")
+def tls_ep(domain: str):
+    from ..security import tls
+    return tls.inspect(domain).__dict__
+
+
+@app.get("/http/{domain}")
+def http_ep(domain: str):
+    from ..security import httpmon
+    return httpmon.check(domain).__dict__
+
+
+@app.get("/lifecycle/{domain}")
+def lifecycle_ep(domain: str):
+    from ..core.lifecycle import classify
+    last = db.last_check(domain)
+    if not last:
+        raise HTTPException(404, "no data")
+    avail = None if last["available"] is None else bool(last["available"])
+    return {"domain": domain, "lifecycle": classify(avail, last["expiration"], last["status"]).value,
+            "expiration": last["expiration"]}
+
+
 @app.get("/metrics")
 def metrics():
     from fastapi.responses import PlainTextResponse
@@ -42,45 +96,90 @@ def metrics():
     return PlainTextResponse(render_prometheus(), media_type="text/plain; version=0.0.4")
 
 
+DASHBOARD_HTML = r"""<!DOCTYPE html><html><head><meta charset="utf-8"><title>DomainWatch</title>
+<style>
+*{box-sizing:border-box}body{font-family:ui-monospace,monospace;background:#0d1117;color:#c9d1d9;margin:0;padding:1.5em}
+h1{margin-top:0}.card{display:inline-block;border:1px solid #30363d;border-radius:8px;padding:1em 1.6em;margin:.4em;text-align:center;min-width:130px}
+.num{font-size:1.8em;color:#58a6ff}.tab{display:inline-block;padding:.5em 1em;border:1px solid #30363d;border-radius:6px;margin:.2em;cursor:pointer}
+.tab.active{background:#1f6feb;border-color:#1f6feb;color:#fff}section{border:1px solid #30363d;border-radius:8px;padding:1em;margin-top:1em;display:none}
+section.active{display:block}table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #21262d;padding:.45em .7em;text-align:left}
+.ok{color:#3fb950}.bad{color:#f85149}.warn{color:#d29922}input,button,select{background:#161b22;border:1px solid #30363d;color:#c9d1d9;border-radius:6px;padding:.4em .7em;margin:.2em}
+button{cursor:pointer}button:hover{background:#1f6feb;color:#fff}pre{white-space:pre-wrap;background:#161b22;border-radius:6px;padding:.8em;overflow-x:auto}
+</style></head><body>
+<h1>DomainWatch <small style="color:#8b949e;font-size:.6em">intelligence platform</small></h1>
+<div id="summary"></div>
+<div>
+<span class="tab active" onclick="show('domains',this)">Domains</span>
+<span class="tab" onclick="show('events',this)">Events</span>
+<span class="tab" onclick="show('tools',this)">Tools</span>
+<span class="tab" onclick="show('providers',this)">Providers</span>
+<span class="tab" onclick="show('alerts',this)">Alerts & Keys</span>
+</div>
+
+<section id="domains" class="active">
+<h2>Tracked domains</h2>
+<input id="nd" placeholder="example.com"><input id="nt" placeholder="target $" type="number">
+<button onclick="addDomain()">Add</button>
+<table id="dtable"><tr><th>Domain</th><th>Status</th><th>Price</th><th>Expires</th><th>Lifecycle</th><th></th></tr></table>
+</section>
+
+<section id="events"><h2>Events</h2><button onclick="loadEvents()">Refresh</button><table id="etable"><tr><th>Time</th><th>Type</th><th>Message</th></tr></table></section>
+
+<section id="tools">
+<h2>Tools</h2>
+Domain: <input id="tdom" placeholder="example.com">
+<button onclick="probe('check')">Check</button>
+<button onclick="probe('score')">Score</button>
+<button onclick="probe('audit')">Audit</button>
+<button onclick="probe('price-compare')">Compare price</button>
+<button onclick="probe('ct')">CT / Certificates</button>
+<button onclick="probe('subdomains')">Subdomains</button>
+<button onclick="probe('tls')">TLS</button>
+<button onclick="probe('http')">HTTP</button>
+<button onclick="probe('lifecycle')">Lifecycle</button>
+<button onclick="probe('dns')">DNS</button>
+<pre id="toolout">Pick a domain and a tool…</pre>
+</section>
+
+<section id="providers"><h2>Provider health</h2><button onclick="loadProviders()">Probe</button><pre id="provout"></pre></section>
+
+<section id="alerts">
+<h2>API keys</h2>
+<input id="kn" placeholder="name"><select id="kr"><option>viewer</option><option>operator</option><option>admin</option><option>auditor</option></select>
+<button onclick="createKey()">Create key</button>
+<button onclick="loadKeys()">Refresh</button>
+<table id="ktable"><tr><th>Name</th><th>Role</th><th>Team</th><th>Revoked</th></tr></table>
+<h2>Audit log</h2><button onclick="loadAudit()">Refresh</button><table id="atable"><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th></tr></table>
+</section>
+
+<script>
+function show(id, el){document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));el.classList.add('active');}
+async function api(u,opts){const r=await fetch(u,opts);return r.json();}
+async function loadSummary(){const d=await api('/domains');let expiring=0,avail=0;for(const x of d){const l=await api('/checks/'+x.domain+'?limit=1').catch(()=>null);}
+document.getElementById('summary').innerHTML=`<div class="card"><div class="num">${d.length}</div>Domains</div><div class="card"><a href="/events" style="color:#58a6ff">Events</a></div><div class="card"><a href="/metrics" style="color:#58a6ff">Metrics</a></div>`;}
+async function loadDomains(){const d=await api('/domains');const t=document.getElementById('dtable');t.innerHTML='<tr><th>Domain</th><th>Status</th><th>Price</th><th>Expires</th><th>Lifecycle</th><th></th></tr>';
+for(const x of d){const last=await api('/checks/'+x.domain+'?limit=1').catch(()=>null);const h=last&&last[0]?last[0]:{};
+const av=h.available===1?'<span class="ok">AVAILABLE</span>':(h.available===0?'<span class="bad">taken</span>':'?');
+t.innerHTML+=`<tr><td>${x.domain}</td><td>${av}</td><td>${h.price?('$'+h.price):'-'}</td><td>${h.expiration||'-'}</td><td>${h.status||'-'}</td><td><button onclick="checkNow('${x.domain}')">check</button> <button onclick="del('${x.domain}')">✕</button></td></tr>`;}}
+async function addDomain(){const n=document.getElementById('nd').value;const t=document.getElementById('nt').value;if(!n)return;await api('/domains?domain='+encodeURIComponent(n)+(t?'&target_price='+t:''),{method:'POST'});loadDomains();}
+async function del(d){await api('/domains/'+d,{method:'DELETE'});loadDomains();}
+async function checkNow(d){await api('/checks/run/'+d);loadDomains();}
+async function loadEvents(){const e=await api('/events');const t=document.getElementById('etable');t.innerHTML='<tr><th>Time</th><th>Type</th><th>Message</th></tr>';e.forEach(x=>t.innerHTML+=`<tr><td>${x.timestamp}</td><td>${x.type}</td><td>${x.message}</td></tr>`);}
+async function probe(what){const d=document.getElementById('tdom').value;if(!d)return alert('enter a domain');
+document.getElementById('toolout').textContent='loading…';
+const map={check:'/checks/run/',score:'/score/',audit:'/audit/','price-compare':'/price-compare/',ct:'/certificates/',subdomains:'/subdomains/',tls:'/tls/',http:'/http/',lifecycle:'/lifecycle/',dns:'/dns/'};
+try{const r=await api(map[what]+d);document.getElementById('toolout').textContent=JSON.stringify(r,null,2);}catch(e){document.getElementById('toolout').textContent='error: '+e;}}
+async function loadProviders(){const r=await fetch('/metrics');document.getElementById('provout').textContent=await r.text();}
+async function createKey(){const n=document.getElementById('kn').value;const r=document.getElementById('kr').value;const res=await api(`/keys?name=${n}&role=${r}`,{method:'POST'});alert('New key: '+res.key);loadKeys();}
+async function loadKeys(){const k=await api('/keys');const t=document.getElementById('ktable');t.innerHTML='<tr><th>Name</th><th>Role</th><th>Team</th><th>Revoked</th></tr>';k.forEach(x=>t.innerHTML+=`<tr><td>${x.name}</td><td>${x.role}</td><td>${x.team}</td><td>${x.revoked}</td></tr>`);}
+async function loadAudit(){const a=await api('/audit?limit=50');const t=document.getElementById('atable');t.innerHTML='<tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th></tr>';a.forEach(x=>t.innerHTML+=`<tr><td>${x.timestamp}</td><td>${x.actor}</td><td>${x.action}</td><td>${x.target}</td></tr>`);}
+loadSummary();loadDomains();loadEvents();
+</script></body></html>"""
+
+
 @app.get("/dashboard", response_class=HTMLResponse)
 def dashboard():
-    from ..core.lifecycle import days_until
-    domains = rows(db.list_domains())
-    alerts = rows(db.events(limit=10))
-    expiring = 0
-    available = 0
-    for d in domains:
-        last = db.last_check(d["domain"])
-        if last:
-            if last["available"]:
-                available += 1
-            du = days_until(last["expiration"])
-            if du is not None and 0 < du <= 30:
-                expiring += 1
-    price_series = []
-    if domains:
-        hist = rows(db.history(domains[0]["domain"], limit=200))
-        price_series = [h["price"] for h in reversed(hist) if h["price"] is not None]
-    # sparkline
-    spark = ""
-    if price_series:
-        mx = max(price_series) or 1
-        spark = "".join("▁▂▃▄▅▆▇█"[int((p / mx) * 7)] for p in price_series)
-    events_html = "".join(f"<li>⚠/★ {e['timestamp']} — {e['message']}</li>" for e in alerts) or "<li>none</li>"
-    html = f"""<html><head><title>DomainWatch</title>
-<style>body{{font-family:monospace;background:#0d1117;color:#c9d1d9;margin:2em}}
-.card{{display:inline-block;border:1px solid #30363d;border-radius:8px;padding:1em 2em;margin:.5em;text-align:center}}
-.num{{font-size:2em;color:#58a6ff}}</style></head><body>
-<h1>DomainWatch</h1>
-<div class="card"><div class="num">{len(domains)}</div>Domains</div>
-<div class="card"><div class="num">{len(alerts)}</div>Recent Events</div>
-<div class="card"><div class="num">{expiring}</div>Expiring ≤30d</div>
-<div class="card"><div class="num">{available}</div>Available</div>
-<h3>Price History ({domains[0]['domain'] if domains else '-'}):</h3>
-<pre style="font-size:1.4em;color:#3fb950">{spark or 'no data'}</pre>
-<h3>Recent Events</h3><ul>{events_html}</ul>
-</body></html>"""
-    return HTMLResponse(html)
+    return HTMLResponse(DASHBOARD_HTML)
 
 
 @app.get("/")
