@@ -34,7 +34,9 @@ class Engine:
         elif provider is not None:
             self.providers = ProviderManager([provider, RdapProvider()])
         else:
-            self.providers = ProviderManager([GoDaddyProvider(), RdapProvider()])
+            from ..sdk import load_provider_plugins
+            extra = load_provider_plugins()
+            self.providers = ProviderManager([GoDaddyProvider(), RdapProvider(), *extra])
         self.bus = EventBus()
         self.alerts = AlertEngine(self.db)
 
