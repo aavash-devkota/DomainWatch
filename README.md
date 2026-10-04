@@ -6,6 +6,8 @@
 
 **Domain availability, price, expiration, DNS and security monitoring from one CLI.**
 
+![Dashboard](docs/screenshot-dashboard.svg)
+
 Think *UptimeRobot for domains*: DomainWatch continuously watches domain names,
 tracks registration prices over time, monitors expiration dates, audits DNS/email
 security posture, and fires alerts to your favorite channel.
