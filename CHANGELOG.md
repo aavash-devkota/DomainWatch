@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.6.0 (2026-10-04)
+- REST API via FastAPI (`domain-monitor serve`): /domains, /checks, /events, /prices, /dns, /certificates, /alerts, /providers, /score, /audit
+- TestClient tests (11 passing)
+
 ## v0.5.2 (2026-10-04)
 - Certificate Transparency monitoring: `domain-monitor ct` (crt.sh with certspotter fallback), `--track` baseline with NEW CERTIFICATE alerts, `ct_seen` migration
 - Subdomain discovery via CT SAN aggregation: `domain-monitor subdomains [--resolve]`
