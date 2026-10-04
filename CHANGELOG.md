@@ -1,10 +1,15 @@
 # Changelog
 
+## v0.7.0 (2026-10-04)
+- Team support: API keys with roles (admin/operator/viewer/auditor), audit log table, `/keys` + `/audit` endpoints, `domain-monitor keys` CLI, `DW_AUTH=1` enforces keys
+
+## v0.6.4 (2026-10-04)
+- Plugin SDK: Provider/Notifier protocols, entry-point discovery (domainwatch.providers/notifiers), engine auto-loads provider plugins
+
 ## v0.6.3 (2026-10-04)
 - `domain-monitor report`: scheduled-report generator (monitored count, availability, price decreases, expiring, 7d event breakdown)
 
-## v0.6.2 (2026-10-04)
-- Prometheus `/metrics` endpoint + in-memory counters (checks, errors, notifications, provider latency, domains)
+## v0.6.2 (2026-10-04)- Prometheus `/metrics` endpoint + in-memory counters (checks, errors, notifications, provider latency, domains)
 
 ## v0.6.1 (2026-10-04)
 - Web dashboard at `/dashboard`: stat cards (domains, recent events, expiring ≤30d, available), price-history sparkline, recent events feed
