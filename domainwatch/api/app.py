@@ -146,6 +146,25 @@ def test_alert(channel: str = "console"):
         raise HTTPException(400, str(e))
 
 
+@app.post("/terminal")
+def terminal(cmd: str = Query(...)):
+    import re, subprocess, shlex
+    cmd = cmd.strip()
+    # allowlist: only domain-monitor (or bare subcommands), no shell features
+    if any(c in cmd for c in (";", "|", "&", "`", "$(", ">", "<", "\n")):
+        raise HTTPException(400, "shell operators are not allowed")
+    parts = shlex.split(cmd)
+    if parts and parts[0] == "domain-monitor":
+        parts = parts[1:]
+    if not parts or parts[0] not in {"check","add","remove","list","status","history","price","expiration","timeline","rdap","dns","audit","discover","run","monitor","db","providers","watch","doctor","export","import","backup","tls","http","lifecycle","ct","subdomains","report","keys","price-compare","score","serve","watch"}:
+        raise HTTPException(400, "only domain-monitor subcommands allowed")
+    try:
+        p = subprocess.run(["domain-monitor", *parts], capture_output=True, text=True, timeout=60)
+        return {"output": (p.stdout or "") + (p.stderr or "")}
+    except subprocess.TimeoutExpired:
+        return {"output": "command timed out after 60s"}
+
+
 @app.get("/metrics")
 def metrics():
     from fastapi.responses import PlainTextResponse
@@ -183,6 +202,7 @@ label{margin-right:.8em;color:var(--muted)}
 <span class="nav" onclick="show('providers',this)">🔌 Providers</span>
 <span class="nav" onclick="show('alerts',this)">🔑 Alerts & Keys</span>
 <span class="nav" onclick="show('settings',this)">⚙️ Settings</span>
+<span class="nav" onclick="show('terminal',this)">⌨ Terminal</span>
 </aside>
 <main>
 <div class="topbar"><div><h1 style="margin:0">DomainWatch</h1><small style="color:var(--muted)">domain intelligence & monitoring</small></div><div id="clock"></div></div>
@@ -214,6 +234,12 @@ Domain: <input id="tdom" placeholder="example.com"><br>
 <button onclick="createKey()">＋ Create</button><button onclick="loadKeys()">⟳</button>
 <table id="ktable"><tr><th>Name</th><th>Role</th><th>Team</th><th>Revoked</th></tr></table>
 <h2>Audit log</h2><button onclick="loadAudit()">⟳</button><table id="atable"><tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th></tr></table></section>
+
+<section id="terminal"><h2>🖥️ Terminal</h2>
+<div id="termout" style="background:#0b0f14;border:1px solid #21262d;border-radius:10px;padding:1em;height:360px;overflow-y:auto;white-space:pre-wrap">DomainWatch web terminal. Type commands below. Allowed: domain-monitor subcommands only.\n</div>
+<input id="terminput" placeholder="domain-monitor status" style="width:80%" onkeydown="if(event.key==='Enter')runTerm()"><button onclick="runTerm()">▶ Run</button>
+<button onclick="document.getElementById('termout').textContent=''">Clear</button>
+</section>
 
 <section id="settings"><h2>Monitoring & alerting</h2>
 Check interval (s): <input id="s_interval" type="number" value="300"><br>
@@ -256,6 +282,9 @@ async function loadAudit(){const a=await api('/audit?limit=50');const t=document
 async function loadSettings(){try{const c=await api('/settings');document.getElementById('s_interval').value=(c.monitor&&c.monitor.interval)||300;const n=c.notifications||{};const nz=n.ntfy||{};document.getElementById('s_ntfy').value=nz.topic||'';document.getElementById('s_ntfy_on').checked=!!nz.enabled;const d=n.discord||{};document.getElementById('s_discord').value=d.webhook||'';document.getElementById('s_discord_on').checked=!!d.enabled;const t=n.telegram||{};document.getElementById('s_tg').value=t.token||'';document.getElementById('s_tgc').value=t.chat_id||'';document.getElementById('s_tg_on').checked=!!t.enabled;}catch(e){}}
 async function saveSettings(){const p=new URLSearchParams();p.set('interval',document.getElementById('s_interval').value);p.set('ntfy_topic',document.getElementById('s_ntfy').value);p.set('ntfy_enabled',document.getElementById('s_ntfy_on').checked);p.set('discord_webhook',document.getElementById('s_discord').value);p.set('discord_enabled',document.getElementById('s_discord_on').checked);p.set('telegram_token',document.getElementById('s_tg').value);p.set('telegram_chat_id',document.getElementById('s_tgc').value);p.set('telegram_enabled',document.getElementById('s_tg_on').checked);await api('/settings?'+p.toString(),{method:'POST'});toast('settings saved');document.getElementById('setout').textContent='saved';}
 async function testAlert(ch){try{const r=await api('/test-alert?channel='+ch,{method:'POST'});document.getElementById('setout').textContent=JSON.stringify(r,null,2);toast('test '+ch);}catch(e){document.getElementById('setout').textContent='error: '+e;}}
+async function runTerm(){const inp=document.getElementById('terminput');const cmd=inp.value.trim();if(!cmd)return;const out=document.getElementById('termout');out.textContent+='\n$ '+cmd+'\n';inp.value='';
+try{const r=await api('/terminal?cmd='+encodeURIComponent(cmd),{method:'POST'});out.textContent+=(r.output||'')+'\n';}catch(e){out.textContent+='error: '+e+'\n';}
+out.scrollTop=out.scrollHeight;}
 loadSummary();loadDomains();loadEvents();loadSettings();
 </script></body></html>"""
 
