@@ -270,6 +270,20 @@ def cmd_watch(args) -> int:
         time.sleep(interval)
 
 
+def cmd_keys(args) -> int:
+    from ..storage import team
+    db = DB()
+    if args.action == "create":
+        print(team.create_key(db.conn, args.name or "key", args.role, args.team))
+    elif args.action == "list":
+        for r in team.list_keys(db.conn):
+            print(dict(r))
+    else:
+        team.revoke_key(db.conn, args.key)
+        print("revoked")
+    return 0
+
+
 def cmd_report(args) -> int:
     from ..report import generate_report
     print(generate_report())
@@ -502,6 +516,7 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("subdomains"); s.add_argument("domain"); s.add_argument("--resolve", action="store_true"); s.set_defaults(func=cmd_subdomains)
     s = sub.add_parser("serve"); s.add_argument("--host", default="127.0.0.1"); s.add_argument("--port", type=int, default=8080); s.set_defaults(func=cmd_serve)
     sub.add_parser("report").set_defaults(func=cmd_report)
+    s = sub.add_parser("keys"); s.add_argument("action", choices=["create", "list", "revoke"]); s.add_argument("--name"); s.add_argument("--role", default="viewer"); s.add_argument("--team", default="default"); s.add_argument("--key"); s.set_defaults(func=cmd_keys)
     s = sub.add_parser("price-compare"); s.add_argument("domain"); s.set_defaults(func=cmd_price_compare)
     s = sub.add_parser("score"); s.add_argument("domain"); s.set_defaults(func=cmd_score)
     s = sub.add_parser("history"); s.add_argument("domain"); s.set_defaults(func=cmd_history)

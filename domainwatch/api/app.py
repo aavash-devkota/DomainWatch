@@ -16,6 +16,25 @@ def rows(rs):
     return [dict(r) for r in rs]
 
 
+def require_role(min_role: str):
+    from fastapi import Header, HTTPException as _HE
+    from ..storage.team import validate_key, ROLE_RANK
+    import os
+
+    def dep(x_api_key: Optional[str] = Header(default=None)):
+        if os.environ.get("DW_AUTH", "").lower() not in ("1", "true", "yes"):
+            return None  # auth disabled by default (single-user mode)
+        if not x_api_key:
+            raise _HE(401, "missing X-API-Key")
+        row = validate_key(db.conn, x_api_key)
+        if row is None:
+            raise _HE(403, "invalid or revoked key")
+        if ROLE_RANK[row["role"]] < ROLE_RANK[min_role]:
+            raise _HE(403, f"requires role {min_role}+")
+        return row
+    return dep
+
+
 @app.get("/metrics")
 def metrics():
     from fastapi.responses import PlainTextResponse
@@ -77,16 +96,40 @@ def list_domains():
     return rows(db.list_domains())
 
 
-@app.post("/domains")
+@app.post("/domains", dependencies=[])
 def add_domain(domain: str, target_price: Optional[float] = None):
+    from ..storage.team import audit
+    audit(db.conn, "api", "add_domain", domain)
     db.add_domain(domain, target_price)
     return {"added": domain}
 
 
 @app.delete("/domains/{domain}")
 def remove_domain(domain: str):
+    from ..storage.team import audit
+    audit(db.conn, "api", "remove_domain", domain)
     db.remove_domain(domain)
     return {"removed": domain}
+
+
+@app.get("/keys")
+def list_api_keys():
+    from ..storage.team import list_keys
+    return [dict(r) for r in list_keys(db.conn)]
+
+
+@app.post("/keys")
+def create_api_key(name: str, role: str = "viewer", team: str = "default"):
+    from ..storage.team import create_key, audit
+    key = create_key(db.conn, name, role, team)
+    audit(db.conn, "api", "create_key", name, role)
+    return {"key": key, "name": name, "role": role, "team": team}
+
+
+@app.get("/audit")
+def audit_logs(limit: int = 50):
+    from ..storage.team import audit_log
+    return [dict(r) for r in audit_log(db.conn, limit)]
 
 
 @app.get("/checks/{domain}")
