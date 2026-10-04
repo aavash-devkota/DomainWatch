@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.2.0 (2026-10-04)
+- Dashboard redesign: left sidebar navigation (Dashboard/Domains/Events/Tools/Providers/Alerts & Keys/Settings), live clock, glassmorphism panels with blur, badge pills for status, canvas price chart, hover row highlight, toast notifications, overview landing page with stat cards and mini event feed
+
 ## v1.1.3 (2026-10-04)
 - Tools tab is multi-select: checkboxes for every tool, Select all / Clear buttons, and "Run selected" executes the chosen set and concatenates labeled results
 
