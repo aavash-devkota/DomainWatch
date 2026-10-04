@@ -270,6 +270,12 @@ def cmd_watch(args) -> int:
         time.sleep(interval)
 
 
+def cmd_report(args) -> int:
+    from ..report import generate_report
+    print(generate_report())
+    return 0
+
+
 def cmd_doctor(args) -> int:
     import shutil, socket, sqlite3, subprocess
     from ..rdap import client as r
@@ -495,6 +501,7 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("ct"); s.add_argument("domain"); s.add_argument("--track", action="store_true"); s.set_defaults(func=cmd_ct)
     s = sub.add_parser("subdomains"); s.add_argument("domain"); s.add_argument("--resolve", action="store_true"); s.set_defaults(func=cmd_subdomains)
     s = sub.add_parser("serve"); s.add_argument("--host", default="127.0.0.1"); s.add_argument("--port", type=int, default=8080); s.set_defaults(func=cmd_serve)
+    sub.add_parser("report").set_defaults(func=cmd_report)
     s = sub.add_parser("price-compare"); s.add_argument("domain"); s.set_defaults(func=cmd_price_compare)
     s = sub.add_parser("score"); s.add_argument("domain"); s.set_defaults(func=cmd_score)
     s = sub.add_parser("history"); s.add_argument("domain"); s.set_defaults(func=cmd_history)
