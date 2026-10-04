@@ -394,6 +394,13 @@ def cmd_score(args) -> int:
     return 0
 
 
+def cmd_serve(args) -> int:
+    import uvicorn
+    from ..api.app import app
+    uvicorn.run(app, host=args.host, port=args.port)
+    return 0
+
+
 def cmd_ct(args) -> int:
     from .. import ct
     from ..core.models import Event, Severity
@@ -487,6 +494,7 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("lifecycle"); s.add_argument("domain"); s.set_defaults(func=cmd_lifecycle)
     s = sub.add_parser("ct"); s.add_argument("domain"); s.add_argument("--track", action="store_true"); s.set_defaults(func=cmd_ct)
     s = sub.add_parser("subdomains"); s.add_argument("domain"); s.add_argument("--resolve", action="store_true"); s.set_defaults(func=cmd_subdomains)
+    s = sub.add_parser("serve"); s.add_argument("--host", default="127.0.0.1"); s.add_argument("--port", type=int, default=8080); s.set_defaults(func=cmd_serve)
     s = sub.add_parser("price-compare"); s.add_argument("domain"); s.set_defaults(func=cmd_price_compare)
     s = sub.add_parser("score"); s.add_argument("domain"); s.set_defaults(func=cmd_score)
     s = sub.add_parser("history"); s.add_argument("domain"); s.set_defaults(func=cmd_history)
