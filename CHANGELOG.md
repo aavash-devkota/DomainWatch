@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.4.0 (2026-10-04)
+- Real interactive terminal in the web UI: xterm.js frontend + WebSocket + pexpect PTY of `/bin/bash`, fit addon, embedded via `/terminal-ui` iframe in the Dashboard Terminal tab
+
 ## v1.3.0 (2026-10-04)
 - Web terminal page in the dashboard (⌘ Terminal tab) with scrollback, clear, Enter-to-run
 - `/terminal` POST endpoint runs domain-monitor subcommands only (allowlist, no shell operators/redirects), 60s timeout
