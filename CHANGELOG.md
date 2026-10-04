@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.6.1 (2026-10-04)
+- Web dashboard at `/dashboard`: stat cards (domains, recent events, expiring ≤30d, available), price-history sparkline, recent events feed
+- SQLite `check_same_thread=False` fix for API thread handling
+
 ## v0.6.0 (2026-10-04)
 - REST API via FastAPI (`domain-monitor serve`): /domains, /checks, /events, /prices, /dns, /certificates, /alerts, /providers, /score, /audit
 - TestClient tests (11 passing)
