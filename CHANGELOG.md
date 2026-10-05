@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.4.1 (2026-10-04)
+- Tools tab redesigned: emoji toggle-chip multi-select (wrapping grid), results render as collapsible per-tool cards instead of one raw JSON blob
+- Metrics no longer opens a raw full window: Providers tab now renders a labeled table (Metric / Label / Value / Meaning) with a small "raw" link; tabs auto-load their data on switch
+
 ## v1.4.0 (2026-10-04)
 - Real interactive terminal in the web UI: xterm.js frontend + WebSocket + pexpect PTY of `/bin/bash`, fit addon, embedded via `/terminal-ui` iframe in the Dashboard Terminal tab
 
