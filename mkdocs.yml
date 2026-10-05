@@ -12,3 +12,4 @@ nav:
   - API: api.md
   - Architecture: architecture.md
   - Contributing: contributing.md
+  - Operation Flow: flow.md
