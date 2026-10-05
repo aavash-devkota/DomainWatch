@@ -52,5 +52,5 @@ jobs:
         with:
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+            ghcr.io/aavash-devkota/domainwatch:latest
+            ghcr.io/aavash-devkota/domainwatch:${{ github.ref_name }}
