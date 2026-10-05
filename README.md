@@ -3,6 +3,8 @@
 [![CI](https://github.com/aavash-devkota/DomainWatch/actions/workflows/tests.yml/badge.svg)](https://github.com/aavash-devkota/DomainWatch/actions/workflows/tests.yml)
 [![Docs](https://github.com/aavash-devkota/DomainWatch/actions/workflows/docs.yml/badge.svg)](https://github.com/aavash-devkota/DomainWatch/actions/workflows/docs.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Release](https://img.shields.io/github/v/tag/aavash-devkota/DomainWatch)](https://github.com/aavash-devkota/DomainWatch/tags)
+[![CI status](https://img.shields.io/github/actions/workflow/status/aavash-devkota/DomainWatch/tests.yml?branch=main)](https://github.com/aavash-devkota/DomainWatch/actions)
 
 **Domain availability, price, expiration, DNS and security monitoring from one CLI.**
 
