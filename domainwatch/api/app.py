@@ -244,6 +244,10 @@ section{background:var(--panel);border:1px solid var(--line);border-radius:14px;
 table{border-collapse:collapse;width:100%}td,th{border-bottom:1px solid #21262d;padding:.5em .8em;text-align:left}th{color:var(--muted);font-weight:600}tr:hover td{background:#1f6feb11}
 .badge{padding:.15em .6em;border-radius:999px;font-size:.8em}.ok{color:var(--green)}.bad{color:var(--red)}.warn{color:var(--yellow)}
 .badge.ok{background:#3fb95022}.badge.bad{background:#f8514922}
+.tool-chip{background:#161b22;border:1px solid var(--line);border-radius:999px;padding:.4em 1em;cursor:pointer;transition:.2s;color:var(--muted)}
+.tool-chip:hover{border-color:var(--accent);color:var(--text)}
+.tool-chip:has(input:checked){background:#1f6feb33;border-color:#1f6feb;color:#fff}
+details{margin:.5em 0;border:1px solid #21262d;border-radius:10px;background:#0b0f14}summary{padding:.6em 1em;cursor:pointer;font-weight:600}details pre{margin:0;border:none}
 input,button,select{background:#161b22;border:1px solid var(--line);color:var(--text);border-radius:10px;padding:.45em .8em;margin:.2em}
 button{cursor:pointer;transition:.2s}button:hover{background:#1f6feb;color:#fff;transform:translateY(-1px)}
 pre{white-space:pre-wrap;background:#0b0f14;border:1px solid #21262d;border-radius:10px;padding:1em;overflow-x:auto;max-height:420px}
@@ -277,14 +281,26 @@ label{margin-right:.8em;color:var(--muted)}
 <input placeholder="Filter…" oninput="filterEl('etable',this.value)" style="width:100%">
 <table id="etable"><tr><th>Time</th><th>Severity</th><th>Message</th></tr></table></section>
 
-<section id="tools"><h2>Tools</h2>
-Domain: <input id="tdom" placeholder="example.com"><br>
-<label><input type="checkbox" value="check" checked> Check</label><label><input type="checkbox" value="score"> Score</label><label><input type="checkbox" value="audit"> Audit</label><label><input type="checkbox" value="price-compare"> Compare</label><label><input type="checkbox" value="ct"> CT</label><label><input type="checkbox" value="subdomains"> Subdomains</label><label><input type="checkbox" value="tls"> TLS</label><label><input type="checkbox" value="http"> HTTP</label><label><input type="checkbox" value="lifecycle"> Lifecycle</label><label><input type="checkbox" value="dns"> DNS</label><br>
+<section id="tools"><h2>🛠 Tools</h2>
+<input id="tdom" placeholder="example.com" style="width:100%"><br>
+<div style="display:flex;flex-wrap:wrap;gap:.5em;margin:.6em 0">
+<label class="tool-chip"><input type="checkbox" value="check" checked> ✅ Check</label>
+<label class="tool-chip"><input type="checkbox" value="score"> 🎯 Score</label>
+<label class="tool-chip"><input type="checkbox" value="audit"> 🔐 Audit</label>
+<label class="tool-chip"><input type="checkbox" value="price-compare"> 💰 Compare</label>
+<label class="tool-chip"><input type="checkbox" value="ct"> 📜 CT</label>
+<label class="tool-chip"><input type="checkbox" value="subdomains"> 🧭 Subdomains</label>
+<label class="tool-chip"><input type="checkbox" value="tls"> 🔒 TLS</label>
+<label class="tool-chip"><input type="checkbox" value="http"> 🌍 HTTP</label>
+<label class="tool-chip"><input type="checkbox" value="lifecycle"> ♻️ Lifecycle</label>
+<label class="tool-chip"><input type="checkbox" value="dns"> 📡 DNS</label>
+</div>
 <button onclick="runSelected()">▶ Run selected</button><button onclick="selectAllTools(true)">Select all</button><button onclick="selectAllTools(false)">Clear</button>
 <input placeholder="Filter output…" oninput="filterPre('toolout',this.value)" style="width:100%">
-<pre id="toolout">Pick a domain, select tools, and run…</pre></section>
+<div id="toolout"></div>
+</section>
 
-<section id="providers"><h2>Provider health & metrics</h2><button onclick="loadProviders()">⟳ Probe</button><pre id="provout"></pre></section>
+<section id="providers"><h2>Provider health & metrics</h2><button onclick="loadProviders()">⟳ Probe</button><div id="provout"></div></section>
 
 <section id="alerts"><h2>API keys</h2>
 <input id="kn" placeholder="name"><select id="kr"><option>viewer</option><option>operator</option><option>admin</option><option>auditor</option></select>
@@ -308,14 +324,16 @@ Check interval (s): <input id="s_interval" type="number" value="300"><br>
 <div id="toast" class="toast"></div>
 
 <script>
-function show(id,el){document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.nav').forEach(n=>n.classList.remove('active'));el.classList.add('active');}
+function show(id,el){document.querySelectorAll('section').forEach(s=>s.classList.remove('active'));document.getElementById(id).classList.add('active');document.querySelectorAll('.nav').forEach(n=>n.classList.remove('active'));el.classList.add('active');if(id==='providers')loadProviders();if(id==='events')loadEvents();if(id==='domains')loadDomains();}
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.style.opacity=1;setTimeout(()=>t.style.opacity=0,2500);}
 setInterval(()=>document.getElementById('clock').textContent=new Date().toLocaleString(),1000);
 async function api(u,o){const r=await fetch(u,o);return r.json();}
 function filterEl(id,q){document.querySelectorAll('#'+id+' tr').forEach((r,i)=>{if(!i)return;r.style.display=r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
-function filterPre(id,q){const el=document.getElementById(id);if(!el.dataset.raw)el.dataset.raw=el.textContent;if(!q){el.textContent=el.dataset.raw;return;}el.textContent=el.dataset.raw.split('\n').filter(l=>l.toLowerCase().includes(q.toLowerCase())).join('\n');}
+function filterPre(id,q){const el=document.getElementById(id);
+if(el.tagName==='PRE'){if(!el.dataset.raw)el.dataset.raw=el.textContent;if(!q){el.textContent=el.dataset.raw;return;}el.textContent=el.dataset.raw.split('\n').filter(l=>l.toLowerCase().includes(q.toLowerCase())).join('\n');return;}
+el.querySelectorAll('details').forEach(d=>{d.style.display=d.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
 async function loadSummary(){const d=await api('/domains');let avail=0;for(const x of d){const h=await api('/checks/'+x.domain+'?limit=1').catch(()=>null);if(h&&h[0]&&h[0].available===1)avail++;}
-document.getElementById('summary').innerHTML=`<div class="card"><div class="num">${d.length}</div><small>Domains</small></div><div class="card"><div class="num">${avail}</div><small>Available</small></div><div class="card"><div class="num"><a href="/metrics" style="color:#58a6ff">📈</a></div><small>Metrics</small></div>`;
+document.getElementById('summary').innerHTML=`<div class="card"><div class="num">${d.length}</div><small>Domains</small></div><div class="card"><div class="num">${avail}</div><small>Available</small></div><div class="card"><div class="num"><a href="#" onclick="show('providers',document.querySelectorAll('.nav')[4]);return false" style="color:#58a6ff">📈</a></div><small>Metrics</small></div>`;
 if(d.length){const h=await api('/checks/'+d[0].domain+'?limit=200').catch(()=>[]);const pts=(h||[]).reverse().filter(x=>x.price).map(x=>x.price);drawChart(pts);}}
 function drawChart(pts){const c=document.getElementById('chart').getContext('2d');c.clearRect(0,0,860,160);if(!pts.length){c.fillStyle='#8b949e';c.fillText('no price history yet',20,80);return;}const mx=Math.max(...pts),mn=Math.min(...pts);c.strokeStyle='#3fb950';c.lineWidth=2;c.beginPath();pts.forEach((p,i)=>{const x=i/(pts.length-1||1)*840+10,y=150-((p-mn)/((mx-mn)||1))*130;i?c.lineTo(x,y):c.moveTo(x,y);});c.stroke();c.fillStyle='#8b949e';c.fillText('min $'+mn+'  max $'+mx,10,150);}
 async function loadDomains(){const d=await api('/domains');const t=document.getElementById('dtable');t.innerHTML='<tr><th>Domain</th><th>Status</th><th>Price</th><th>Expires</th><th>Lifecycle</th><th></th></tr>';
@@ -329,8 +347,12 @@ const m=document.getElementById('evmini');m.innerHTML='<tr><th>Time</th><th>Mess
 function selectAllTools(v){document.querySelectorAll('#tools input[type=checkbox]').forEach(c=>c.checked=v);}
 async function runSelected(){const d=document.getElementById('tdom').value;if(!d)return alert('enter a domain');const chosen=[...document.querySelectorAll('#tools input[type=checkbox]:checked')].map(c=>c.value);if(!chosen.length)return alert('select tools');
 const map={check:'/checks/run/',score:'/score/',audit:'/audit/','price-compare':'/price-compare/',ct:'/certificates/',subdomains:'/subdomains/',tls:'/tls/',http:'/http/',lifecycle:'/lifecycle/',dns:'/dns/'};const el=document.getElementById('toolout');el.textContent='';delete el.dataset.raw;
-for(const w of chosen){el.textContent+='\n===== '+w.toUpperCase()+' =====\n';try{el.textContent+=JSON.stringify(await api(map[w]+d),null,2)+'\n';}catch(e){el.textContent+='error: '+e+'\n';}delete el.dataset.raw;}}
-async function loadProviders(){const r=await fetch('/metrics');document.getElementById('provout').textContent=await r.text();}
+for(const w of chosen){const card=document.createElement('details');card.open=true;card.innerHTML=`<summary>${w.toUpperCase()}</summary><pre>loading…</pre>`;el.appendChild(card);
+try{const r=await api(map[w]+d);card.querySelector('pre').textContent=JSON.stringify(r,null,2);}catch(e){card.querySelector('pre').textContent='error: '+e;}}}
+const METRICS_HELP={domainwatch_checks_total:'Total domain check attempts',domainwatch_check_errors_total:'Check attempts that errored',domainwatch_notifications_total:'Alerts emitted',domainwatch_domains_monitored:'Domains currently tracked',domainwatch_domains_expiring:'Expiring within 30 days',domainwatch_available_domains:'Tracked as available',domainwatch_provider_latency_seconds:'Average provider response time (s), per provider'};
+async function loadProviders(){const r=await fetch('/metrics');const txt=await r.text();const rows=txt.trim().split('\n').map(l=>{const m=l.match(/^(\S+?)(?:\{([^}]*)\})?\s+(\S+)$/);if(!m)return null;const name=m[1];return {name,label:m[2]||'',value:m[3],help:METRICS_HELP[name]||''};}).filter(Boolean);
+let html='<table><tr><th>Metric</th><th>Label</th><th>Value</th><th>Meaning</th></tr>';rows.forEach(x=>html+=`<tr><td><code>${x.name}</code></td><td><small>${x.label}</small></td><td><b>${x.value}</b></td><td><small>${x.help}</small></td></tr>`);html+='</table><p><small><a href="/metrics" target="_blank">Open raw Prometheus text ↗</a></small></p>';
+document.getElementById('provout').innerHTML=html;}
 async function createKey(){const n=document.getElementById('kn').value,r=document.getElementById('kr').value;const res=await api(`/keys?name=${n}&role=${r}`,{method:'POST'});toast('key created');alert('New key: '+res.key);loadKeys();}
 async function loadKeys(){const k=await api('/keys');const t=document.getElementById('ktable');t.innerHTML='<tr><th>Name</th><th>Role</th><th>Team</th><th>Revoked</th></tr>';k.forEach(x=>t.innerHTML+=`<tr><td>${x.name}</td><td>${x.role}</td><td>${x.team}</td><td>${x.revoked}</td></tr>`);}
 async function loadAudit(){const a=await api('/audit?limit=50');const t=document.getElementById('atable');t.innerHTML='<tr><th>Time</th><th>Actor</th><th>Action</th><th>Target</th></tr>';a.forEach(x=>t.innerHTML+=`<tr><td>${x.timestamp}</td><td>${x.actor}</td><td>${x.action}</td><td>${x.target}</td></tr>`);}
