@@ -30,6 +30,7 @@ security posture, and fires alerts to your favorite channel.
 
 ## Table of contents
 
+0. [Operation flow & user guide](FLOW.md)
 1. [Installation](#installation)
 2. [Quick start](#quick-start)
 3. [CLI reference](#cli-reference)
